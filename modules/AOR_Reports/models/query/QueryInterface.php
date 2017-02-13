@@ -10,5 +10,5 @@ include_once __DIR__.DIRECTORY_SEPARATOR.'..'.DIRECTORY_SEPARATOR.'..'.DIRECTORY
 
 interface QueryInterface
 {
-    public function buildQuery();
+    public function getQuery();
 }

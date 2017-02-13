@@ -17,7 +17,7 @@ class QueryFactory
 
     public function makeQuery($type){
         switch($type){
-            case 'MySql':
+            case 'MySQL':
                 return new MysqlQuery();
                 break;
             default:

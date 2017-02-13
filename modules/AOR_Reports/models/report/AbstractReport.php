@@ -74,6 +74,7 @@ abstract class AbstractReport implements ReportInterface
     public function setFields($fields)
     {
         $this->fields = $fields;
+        return $this;
     }
 
     /**
@@ -82,6 +83,7 @@ abstract class AbstractReport implements ReportInterface
     public function setMainGroupField($mainGroupField)
     {
         $this->mainGroupField = $mainGroupField;
+        return $this;
     }
 
     /**
@@ -90,6 +92,7 @@ abstract class AbstractReport implements ReportInterface
     public function setBean($bean)
     {
         $this->bean = $bean;
+        return $this;
     }
 
     /**
@@ -98,6 +101,7 @@ abstract class AbstractReport implements ReportInterface
     public function setBeanList($beanList)
     {
         $this->beanList = $beanList;
+        return $this;
     }
 
     /**
@@ -106,8 +110,8 @@ abstract class AbstractReport implements ReportInterface
     public function setResult($result)
     {
         $this->result = $result;
+        return $this;
     }
-
 
 
     protected function getFields()
