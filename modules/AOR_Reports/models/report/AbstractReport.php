@@ -12,12 +12,16 @@ include_once ROOTPATH.'/modules/AOR_Reports/models/report/ReportInterface.php';
 abstract class AbstractReport implements ReportInterface
 {
     private $queryFactory = null;
+
+
     private $markupFactory = null;
     private $fields = null;
     private $mainGroupField = null;
     private $bean = null;
     private $beanList = null;
     private $result = null;
+
+
 
     public function __construct($queryFactory, $markupFactory)
     {
@@ -102,5 +106,51 @@ abstract class AbstractReport implements ReportInterface
     public function setResult($result)
     {
         $this->result = $result;
+    }
+
+
+
+    protected function getFields()
+    {
+        return $this->fields;
+    }
+
+
+    protected function getMainGroupField()
+    {
+        return $this->mainGroupField;
+    }
+
+
+    protected function getBean()
+    {
+        return $this->bean;
+    }
+
+    protected function getBeanList()
+    {
+        return $this->beanList;
+    }
+
+
+    protected function getResult()
+    {
+        return $this->result;
+    }
+
+    /**
+     * @return null
+     */
+    protected function getQueryFactory()
+    {
+        return $this->queryFactory;
+    }
+
+    /**
+     * @return null
+     */
+    protected function getMarkupFactory()
+    {
+        return $this->markupFactory;
     }
 }

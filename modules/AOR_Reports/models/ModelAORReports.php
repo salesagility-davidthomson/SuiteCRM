@@ -300,7 +300,7 @@ class ModelAORReports
 
         $sql = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY field_order ASC";
         $result = $bean->db->query($sql);
-        $mainGroupField = null;
+        $mainGroupField = '';
         $fields = array();
 
         $report = ReportFactory::makeReport('chart');
@@ -313,6 +313,10 @@ class ModelAORReports
         $reportContent = $report->getReport();
 
         die();
+
+        if($mainGroupField == ''){
+            $mainGroupField = null; //need to set so AOR_Chart->buildChartHTML functions correctly
+        }
         $this->createLabelData($result, $beanList, $fields, $mainGroupField);
 
         try {
