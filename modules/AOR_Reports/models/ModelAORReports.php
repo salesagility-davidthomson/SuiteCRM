@@ -295,24 +295,24 @@ class ModelAORReports
      */
     public function buildReportChart($bean, $beanList, $chartIds = null, $chartType = self::CHART_TYPE_PCHART)
     {
-//        global $beanList;
-//        $html = '';
+        global $beanList;
+        $html = '';
 
         $sql = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY field_order ASC";
         $result = $bean->db->query($sql);
         $mainGroupField = '';
         $fields = array();
 
-        $report = ReportFactory::makeReport('chart');
-        $report->setBean($bean);
-        $report->setBeanList($beanList);
-        $report->setFields($fields);
-        $report->setMainGroupField($mainGroupField);
-        $report->setResult($result);
-
-        $reportContent = $report->getReport();
-
-        die();
+//        $report = ReportFactory::makeReport('chart');
+//        $report->setBean($bean);
+//        $report->setBeanList($beanList);
+//        $report->setFields($fields);
+//        $report->setMainGroupField($mainGroupField);
+//        $report->setResult($result);
+//
+//        $reportContent = $report->getReport();
+//
+//        die();
 
         if($mainGroupField == ''){
             $mainGroupField = null; //need to set so AOR_Chart->buildChartHTML functions correctly

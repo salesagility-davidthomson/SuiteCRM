@@ -68,6 +68,8 @@ abstract class AbstractReport implements ReportInterface
 
     abstract protected function generateReport();
 
+
+
     /**
      * @param null $fields
      */

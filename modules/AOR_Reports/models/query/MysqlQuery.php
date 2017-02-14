@@ -50,12 +50,12 @@ class MysqlQuery extends AbstractQuery
     private function buildReportQueryChart($group_value = '', $extra = array())
     {
         //Check if the user has access to the target module
-        if (!(ACLController::checkAccess($this->report_module, 'list', true))) {
+        if (!(ACLController::checkAccess($this->getReportModule(), 'list', true))) {
             throw new Exception('User Not Allowed Access To This Module', 101);
         }
 
         $beanList =$this->getBeanList();
-        $module = new $beanList[$this->report_module]();
+        $module = new $beanList[$this->getReportModule]();
         $query = '';
         $query_array = array();
 
@@ -144,6 +144,158 @@ class MysqlQuery extends AbstractQuery
 
         return $query;
     }
+
+    /**
+     * @param $name
+     * @param $alias
+     * @param $parentAlias
+     * @param SugarBean $module
+     * @param $type
+     * @param array $query
+     * @param SugarBean|null $rel_module
+     * @return array
+     */
+    public function buildReportQueryJoin(
+        $name,
+        $alias,
+        $parentAlias,
+        SugarBean $module,
+        $type,
+        $query = array(),
+        SugarBean $rel_module = null
+    ) {
+
+        if (!isset($query['join'][$alias])) {
+
+            switch ($type) {
+                case 'custom':
+                    $query['join'][$alias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($module->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($name) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($name) . '.id_c ';
+                    break;
+
+                case 'relationship':
+                    if ($module->load_relationship($name)) {
+                        $params['join_type'] = 'LEFT JOIN';
+                        if ($module->$name->relationship_type != 'one-to-many') {
+                            if ($module->$name->getSide() == REL_LHS) {
+                                $params['right_join_table_alias'] = $this->db->quoteIdentifier($alias);
+                                $params['join_table_alias'] = $this->db->quoteIdentifier($alias);
+                                $params['left_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
+                            } else {
+                                $params['right_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
+                                $params['join_table_alias'] = $this->db->quoteIdentifier($alias);
+                                $params['left_join_table_alias'] = $this->db->quoteIdentifier($alias);
+                            }
+
+                        } else {
+                            $params['right_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
+                            $params['join_table_alias'] = $this->db->quoteIdentifier($alias);
+                            $params['left_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
+                        }
+                        $linkAlias = $parentAlias . "|" . $alias;
+                        $params['join_table_link_alias'] = $this->db->quoteIdentifier($linkAlias);
+                        $join = $module->$name->getJoin($params, true);
+                        $query['join'][$alias] = $join['join'];
+                        if ($rel_module != null) {
+                            $query['join'][$alias] .= $this->build_report_access_query($rel_module, $name);
+                        }
+                        $query['id_select'][$alias] = $join['select'] . " AS '" . $alias . "_id'";
+                        $query['id_select_group'][$alias] = $join['select'];
+                    }
+                    break;
+                default:
+                    break;
+
+            }
+
+        }
+
+        return $query;
+    }
+
+
+
+    /**
+     * @param $conditionOperator
+     * @param $value
+     * @return string
+     */
+    private function handleLikeConditions($conditionOperator, $value)
+    {
+        Switch ($conditionOperator) {
+            case 'Contains':
+                $value = "CONCAT('%', " . $value . " ,'%')";
+                break;
+            case 'Starts_With':
+                $value = "CONCAT(" . $value . " ,'%')";
+                break;
+            case 'Ends_With':
+                $value = "CONCAT('%', " . $value . ")";
+                break;
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param $query
+     * @param $where_set
+     * @param $condition
+     * @param $app_list_strings
+     * @param $tiltLogicOp
+     * @param $aor_sql_operator_list
+     * @param $field
+     * @param $value
+     * @return array
+     */
+    private function whereNotSet(
+        $query,
+        $where_set,
+        $condition,
+        $app_list_strings,
+        $tiltLogicOp,
+        $aor_sql_operator_list,
+        $field,
+        $value
+    ) {
+        if (!$where_set) {
+            if ($condition->value_type == "Period") {
+                if (array_key_exists($condition->value, $app_list_strings['date_time_period_list'])) {
+                    $params = $condition->value;
+                } else {
+                    $params = base64_decode($condition->value);
+                }
+                $date = getPeriodEndDate($params)->format('Y-m-d H:i:s');
+                $value = '"' . getPeriodDate($params)->format('Y-m-d H:i:s') . '"';
+
+                $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND '));
+                $tiltLogicOp = false;
+
+                switch ($aor_sql_operator_list[$condition->operator]) {
+                    case "=":
+                        $query['where'][] = $field . ' BETWEEN ' . $value . ' AND ' . '"' . $date . '"';
+                        break;
+                    case "!=":
+                        $query['where'][] = $field . ' NOT BETWEEN ' . $value . ' AND ' . '"' . $date . '"';
+                        break;
+                    case ">":
+                    case "<":
+                    case ">=":
+                    case "<=":
+                        $query['where'][] = $field . ' ' . $aor_sql_operator_list[$condition->operator] . ' ' . $value;
+                        break;
+                }
+
+                return array($value, $query, $tiltLogicOp);
+            } else {
+                $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . $field . ' ' . $aor_sql_operator_list[$condition->operator] . ' ' . $value;
+
+                return array($value, $query);
+            }
+        }
+
+        return array($value, $query);
+    }
+
 
 
     /**
@@ -249,90 +401,6 @@ class MysqlQuery extends AbstractQuery
         return $query;
     }
 
-    /**
-     * @param $firstParam
-     * @param $sugar_config
-     * @param $field
-     * @return array
-     */
-    private function processForDateFrom($firstParam, $sugar_config, $field, $query, $condition_module)
-    {
-        switch ($firstParam) {
-            case 'now':
-                if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
-                    $value = 'GetDate()';
-                } else {
-                    $value = 'NOW()';
-                }
-                break;
-            case 'today':
-                if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
-                    //$field =
-                    $value = 'CAST(GETDATE() AS DATE)';
-                } else {
-                    $field = 'DATE(' . $field . ')';
-                    $value = 'Curdate()';
-                }
-                break;
-            default:
-                $data = $condition_module->field_defs[$firstParam];
-                $tableName = $condition_module->table_name;
-                $table_alias = $tableName;
-                $fieldName = $firstParam;
-                $dataSourceIsSet = isset($data['source']);
-                if ($dataSourceIsSet) {
-                    $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
-                }
-
-                //setValueSuffix
-                $value = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias,
-                    $fieldName);
-                $query = $this->buildJoinQueryForCustomFields($isCustomField, $query,
-                    $table_alias, $tableName, $condition_module);
-
-
-                break;
-        }
-
-        return array($value, $field, $query);
-    }
-
-    /**
-     * @param $secondParam
-     * @param $fourthParam
-     * @param $sugar_config
-     * @param $app_list_strings
-     * @param $thirdParam
-     * @param $value
-     * @return string
-     */
-    private function processForDateOther(
-        $secondParam,
-        $fourthParam,
-        $sugar_config,
-        $app_list_strings,
-        $thirdParam,
-        $value
-    ) {
-        if ($secondParam != 'now') {
-            switch ($fourthParam) {
-                case 'business_hours';
-                    //business hours not implemented for query, default to hours
-                    $fourthParam = 'hours';
-                default:
-                    if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
-                        $value = "DATEADD(" . $fourthParam . ",  " . $app_list_strings['aor_date_operator'][$secondParam] . " $thirdParam, $value)";
-                    } else {
-                        $value = "DATE_ADD($value, INTERVAL " . $app_list_strings['aor_date_operator'][$secondParam] . " $thirdParam " . $fourthParam . ")";
-                    }
-                    break;
-            }
-
-            return $value;
-        }
-
-        return $value;
-    }
 
 
 
@@ -491,90 +559,6 @@ class MysqlQuery extends AbstractQuery
 
 
     /**
-     * @param $conditionOperator
-     * @param $value
-     * @return string
-     */
-    private function handleLikeConditions($conditionOperator, $value)
-    {
-        Switch ($conditionOperator) {
-            case 'Contains':
-                $value = "CONCAT('%', " . $value . " ,'%')";
-                break;
-            case 'Starts_With':
-                $value = "CONCAT(" . $value . " ,'%')";
-                break;
-            case 'Ends_With':
-                $value = "CONCAT('%', " . $value . ")";
-                break;
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param $query
-     * @param $where_set
-     * @param $condition
-     * @param $app_list_strings
-     * @param $tiltLogicOp
-     * @param $aor_sql_operator_list
-     * @param $field
-     * @param $value
-     * @return array
-     */
-    private function whereNotSet(
-        $query,
-        $where_set,
-        $condition,
-        $app_list_strings,
-        $tiltLogicOp,
-        $aor_sql_operator_list,
-        $field,
-        $value
-    ) {
-        if (!$where_set) {
-            if ($condition->value_type == "Period") {
-                if (array_key_exists($condition->value, $app_list_strings['date_time_period_list'])) {
-                    $params = $condition->value;
-                } else {
-                    $params = base64_decode($condition->value);
-                }
-                $date = getPeriodEndDate($params)->format('Y-m-d H:i:s');
-                $value = '"' . getPeriodDate($params)->format('Y-m-d H:i:s') . '"';
-
-                $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND '));
-                $tiltLogicOp = false;
-
-                switch ($aor_sql_operator_list[$condition->operator]) {
-                    case "=":
-                        $query['where'][] = $field . ' BETWEEN ' . $value . ' AND ' . '"' . $date . '"';
-                        break;
-                    case "!=":
-                        $query['where'][] = $field . ' NOT BETWEEN ' . $value . ' AND ' . '"' . $date . '"';
-                        break;
-                    case ">":
-                    case "<":
-                    case ">=":
-                    case "<=":
-                        $query['where'][] = $field . ' ' . $aor_sql_operator_list[$condition->operator] . ' ' . $value;
-                        break;
-                }
-
-                return array($value, $query, $tiltLogicOp);
-            } else {
-                $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . $field . ' ' . $aor_sql_operator_list[$condition->operator] . ' ' . $value;
-
-                return array($value, $query);
-            }
-        }
-
-        return array($value, $query);
-    }
-
-
-
-    /**
      * @param $query_array
      * @param $query
      * @return array
@@ -701,5 +685,122 @@ class MysqlQuery extends AbstractQuery
 
         return $query;
     }
+
+
+    /**
+     * @param $query
+     * @param $data
+     * @param $beanList
+     * @param $field_module
+     * @param $oldAlias
+     * @param $field
+     * @param $table_alias
+     * @return array
+     */
+    private function BuildQueryForLinkType(
+        $query,
+        $data,
+        $beanList,
+        $field_module,
+        $oldAlias
+    ) {
+        if ($data['type'] == 'link' && $data['source'] == 'non-db') {
+            $new_field_module = new $beanList[getRelatedModule($field_module->module_dir, $data['relationship'])];
+            $table_alias = $data['relationship'];
+
+            $query = $this->buildReportQueryJoin($data['relationship'], $table_alias, $oldAlias,$field_module, 'relationship', $query, $new_field_module);
+
+            return $query;
+        }
+
+        return $query;
+    }
+
+
+    /**
+     * @param $firstParam
+     * @param $sugar_config
+     * @param $field
+     * @return array
+     */
+    private function processForDateFrom($firstParam, $sugar_config, $field, $query, $condition_module)
+    {
+        switch ($firstParam) {
+            case 'now':
+                if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
+                    $value = 'GetDate()';
+                } else {
+                    $value = 'NOW()';
+                }
+                break;
+            case 'today':
+                if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
+                    //$field =
+                    $value = 'CAST(GETDATE() AS DATE)';
+                } else {
+                    $field = 'DATE(' . $field . ')';
+                    $value = 'Curdate()';
+                }
+                break;
+            default:
+                $data = $condition_module->field_defs[$firstParam];
+                $tableName = $condition_module->table_name;
+                $table_alias = $tableName;
+                $fieldName = $firstParam;
+                $dataSourceIsSet = isset($data['source']);
+                if ($dataSourceIsSet) {
+                    $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
+                }
+
+                //setValueSuffix
+                $value = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias,
+                    $fieldName);
+                $query = $this->buildJoinQueryForCustomFields($isCustomField, $query,
+                    $table_alias, $tableName, $condition_module);
+
+
+                break;
+        }
+
+        return array($value, $field, $query);
+    }
+
+    /**
+     * @param $secondParam
+     * @param $fourthParam
+     * @param $sugar_config
+     * @param $app_list_strings
+     * @param $thirdParam
+     * @param $value
+     * @return string
+     */
+    private function processForDateOther(
+        $secondParam,
+        $fourthParam,
+        $sugar_config,
+        $app_list_strings,
+        $thirdParam,
+        $value
+    ) {
+        if ($secondParam != 'now') {
+            switch ($fourthParam) {
+                case 'business_hours';
+                    //business hours not implemented for query, default to hours
+                    $fourthParam = 'hours';
+                default:
+                    if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
+                        $value = "DATEADD(" . $fourthParam . ",  " . $app_list_strings['aor_date_operator'][$secondParam] . " $thirdParam, $value)";
+                    } else {
+                        $value = "DATE_ADD($value, INTERVAL " . $app_list_strings['aor_date_operator'][$secondParam] . " $thirdParam " . $fourthParam . ")";
+                    }
+                    break;
+            }
+
+            return $value;
+        }
+
+        return $value;
+    }
+
 
 }

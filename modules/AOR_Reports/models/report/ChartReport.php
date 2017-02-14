@@ -81,7 +81,7 @@ class ChartReport extends AbstractReport
 
             if ($field->group_display) {
 
-                // if we have a main group already thats wrong cause only one main grouping field possible
+                // if we have a main group already that's wrong because only one main grouping field possible
                 if (!is_null($this->getMainGroupField())) {
                     $GLOBALS['log']->fatal('main group already found');
                 }
@@ -100,12 +100,11 @@ class ChartReport extends AbstractReport
      * @param $fields
      * @return array
      */
-    private function BuildDataRowsForChart(
-        $result,
-        $fields
-    ) {
+    private function BuildDataRowsForChart() {
+        $bean = $this->getBean();
+        $fields = $this->getFields();
         $data = array();
-        while ($row = $this->db->fetchByAssoc($result, false)) {
+        while ($row = $bean->db->fetchByAssoc($this->getResult(),false)) {
             foreach ($fields as $name => $att) {
 
                 $currency_id = isset($row[$att['alias'] . '_currency_id']) ? $row[$att['alias'] . '_currency_id'] : '';
@@ -174,10 +173,11 @@ class ChartReport extends AbstractReport
      * @param $field
      * @return mixed
      */
-    private function BuildDataForRelateType(
-        $field_module,
-        $field
-    ) {
+    private function BuildDataForRelateType() {
+        $field = new \AOR_Field();
+        $beanList = $this->$this->getBeanList();
+        $field_module = new $beanList[$this->report_module]();
+
         $data = $field_module->field_defs[$field->field];
         if ($data['type'] == 'relate' && isset($data['id_name'])) {
             $field->field = $data['id_name'];
@@ -206,27 +206,23 @@ class ChartReport extends AbstractReport
      * @return array
      */
     private function BuildDataForLinkType(
-        $query,
         $data,
         $beanList,
         $field_module,
-        $oldAlias,
         $field,
         $table_alias
     ) {
         if ($data['type'] == 'link' && $data['source'] == 'non-db') {
-            $new_field_module = new $beanList[getRelatedModule($field_module->module_dir,
-                $data['relationship'])];
+            $new_field_module = new $beanList[getRelatedModule($field_module->module_dir, $data['relationship'])];
             $table_alias = $data['relationship'];
-            $query = $this->buildReportQueryJoin($data['relationship'], $table_alias, $oldAlias,
-                $field_module, 'relationship', $query, $new_field_module);
+
             $field_module = $new_field_module;
             $field->field = 'id';
 
-            return array($table_alias, $query, $field_module);
+            return array($table_alias, $field_module);
         }
 
-        return array($table_alias, $query, $field_module);
+        return array($table_alias, $field_module);
     }
 
 
