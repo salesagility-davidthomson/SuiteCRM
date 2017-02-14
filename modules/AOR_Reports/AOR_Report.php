@@ -971,6 +971,7 @@ class AOR_Report extends Basic
     {
         global $beanList;
         $module = new $beanList[$this->report_module]();
+        $tableName = $module->table_name;
         $query = '';
         $query_array = array();
 
@@ -990,7 +991,7 @@ class AOR_Report extends Basic
 
         $query = $this->buildQueryGroupBy($query_array, $query);
 
-        $query = $this->buildQueryFrom($module, $query);
+        $query = $this->buildQueryFrom($query_array, $query);
 
         $query = $this->buildQueryJoin($query_array, $query);
 
@@ -1037,84 +1038,50 @@ class AOR_Report extends Basic
     public function buildReportChart($chartIds = null, $chartType = self::CHART_TYPE_PCHART)
     {
         global $beanList;
-        $html = '';
 
-        $sql = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY field_order ASC";
-        $result = $this->db->query($sql);
+        $ResultRowArray = $this->getResultRows();
 
-        $mainGroupField = null;
-        $fields = array();
+        $fields = $this->createLabels($ResultRowArray, $beanList);
 
-        list($fields, $mainGroupField) = $this->createLabels($result, $beanList, $fields, $mainGroupField);
+        $mainGroupField = $this->getMainGroupSet($ResultRowArray);
 
+
+        global $beanList, $timedate;
         try {
-            $query = $this->buildReportQueryChart();//this is where it needs to branch one report for normal queries and one for charts
+            $query = $this->buildReportQueryChart($beanList, $timedate);//this is where it needs to branch one report for normal queries and one for charts
         } catch (Exception $e) {
             echo 'Caught exception: ', $e->getMessage(), "\n";
         }
 
-//      use query to get results from database of choice
 
-        $result = $this->db->query($query);
-        $data = $this->BuildDataRowsForChart($result, $fields);
+        $result2 = $this->db->query($query);
+        $data = $this->BuildDataRowsForChart($result2, $fields);
 
         $fields = $this->getReportFields();
 
-        switch ($chartType) {
-            case self::CHART_TYPE_PCHART:
-                $html = '<script src="modules/AOR_Charts/lib/pChart/imagemap.js"></script>';
-                break;
-            case self::CHART_TYPE_CHARTJS:
-                $html = '<script src="modules/AOR_Reports/js/Chart.js"></script>';
-                break;
-            case self::CHART_TYPE_RGRAPH:
-                if ($_REQUEST['module'] != 'Home') {
-                    require_once('include/SuiteGraphs/RGraphIncludes.php');
-                }
-
-                break;
-        }
-        $x = 0;
-
-
-
-        $linkedCharts = $this->get_linked_beans('aor_charts', 'AOR_Charts');
-        if (!$linkedCharts) {
-            //No charts to display
-            return '';
-        }
-
-        foreach ($linkedCharts as $chart) {
-            if ($chartIds !== null && !in_array($chart->id, $chartIds)) {
-                continue;
-            }
-            $html .= $chart->buildChartHTML($data, $fields, $x, $chartType, $mainGroupField);
-            $x++;
-        }
+        $html = $this->StartBuildChartHTML($chartIds, $chartType, $data, $fields, $mainGroupField);
 
         return $html;
     }
 
 
-    /**
-     * @param string $group_value
-     * @param array $extra
-     * @return array|string
-     * @throws Exception
-     */
-    public function buildReportQueryChart($group_value = '', $extra = array())
+
+
+    public function buildReportQueryChart($beanList, $timedate, $group_value = '', $extra = array())
     {
+
+
         //Check if the user has access to the target module
         if (!(ACLController::checkAccess($this->report_module, 'list', true))) {
             throw new Exception('User Not Allowed Access To This Module', 101);
         }
 
-        global $beanList;
-        $module = new $beanList[$this->report_module]();
+
+
         $query = '';
         $query_array = array();
 
-        $query_array = $this->buildQueryArraySelectForChart($query_array, $group_value);
+        $query_array = $this->buildQueryArraySelectForChart($beanList, $timedate, $query_array, $group_value);
 
         try {
             $query_array = $this->buildQueryArrayWhere($query_array, $extra);
@@ -1126,7 +1093,7 @@ class AOR_Report extends Basic
 
         $query = $this->buildQueryGroupBy($query_array, $query);
 
-        $query = $this->buildQueryFrom($module, $query);
+        $query = $this->buildQueryFrom($query_array, $query);
 
         $query = $this->buildQueryJoin($query_array, $query);
 
@@ -1146,9 +1113,9 @@ class AOR_Report extends Basic
      * @param string $group_value
      * @return array
      */
-    public function buildQueryArraySelectForChart($query = array(), $group_value = '')
+    public function buildQueryArraySelectForChart($beanList, $timedate,$query = array(), $group_value = '')
     {
-        global $beanList, $timedate;
+
         $chartbean = BeanFactory::newBean('AOR_Charts');
 
         $sql = "SELECT id FROM aor_charts WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY name ASC";
@@ -1159,7 +1126,7 @@ class AOR_Report extends Basic
 
         if ($beanList[$this->report_module]) {
             $module = new $beanList[$this->report_module]();
-
+            $query['tableName'] = $module->table_name;
             $query['id_select'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id AS '" . $module->table_name . "_id'";
             $query['id_select_group'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id";
 
@@ -1189,7 +1156,7 @@ class AOR_Report extends Basic
 
         if ($beanList[$this->report_module]) {
             $module = new $beanList[$this->report_module]();
-
+            $query['tableName'] = $module->table_name;
             $query['id_select'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id AS '" . $module->table_name . "_id'";
             $query['id_select_group'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id";
 
@@ -1509,22 +1476,11 @@ class AOR_Report extends Basic
         return $query;
     }
 
-    /**
-     * @param $result
-     * @param $beanList
-     * @param $fields
-     * @param $mainGroupField
-     * @param $row
-     */
-    private function createLabels(
-        $result,
-        $beanList,
-        $fields,
-        $mainGroupField
-    ) {
+
+    private function createLabels($rowArray,$beanList) {
         $i = 0;
 
-        while ($row = $this->db->fetchByAssoc($result)) {
+        foreach ($rowArray as $row) {
 
             $field = new AOR_Field();
             $field->retrieve($row['id']);
@@ -1545,33 +1501,19 @@ class AOR_Report extends Basic
                 }
             }
             $label = str_replace(' ', '_', $field->label) . $i;
-            $fields[$label]['field'] = $field->field;
-            $fields[$label]['label'] = $field->label;
-            $fields[$label]['display'] = $field->display;
-            $fields[$label]['function'] = $field->field_function;
-            $fields[$label]['module'] = $field_module;
-            $fields[$label]['alias'] = $field_alias;
-            $fields[$label]['link'] = $field->link;
-            $fields[$label]['total'] = $field->total;
-            $fields[$label]['params'] = $field->format;
-
-
-            // get the main group
-
-            if ($field->group_display) {
-
-                // if we have a main group already thats wrong cause only one main grouping field possible
-                if (!is_null($mainGroupField)) {
-                    $GLOBALS['log']->fatal('main group already found');
-                }
-
-                $mainGroupField = $field;
-            }
+            $fieldsArray[$label]['field'] = $field->field;
+            $fieldsArray[$label]['label'] = $field->label;
+            $fieldsArray[$label]['display'] = $field->display;
+            $fieldsArray[$label]['function'] = $field->field_function;
+            $fieldsArray[$label]['module'] = $field_module;
+            $fieldsArray[$label]['alias'] = $field_alias;
+            $fieldsArray[$label]['link'] = $field->link;
+            $fieldsArray[$label]['total'] = $field->total;
+            $fieldsArray[$label]['params'] = $field->format;
 
             ++$i;
         }
-
-        return array($fields, $mainGroupField);
+        return $fieldsArray;
     }
 
     /**
@@ -2445,13 +2387,14 @@ class AOR_Report extends Basic
     }
 
     /**
-     * @param $module
+     * @param $tableName
      * @param $query
      * @return string
+     * @internal param $module
      */
-    private function buildQueryFrom($module, $query)
+    private function buildQueryFrom($query_array, $query)
     {
-        $query .= ' FROM ' . $this->db->quoteIdentifier($module->table_name) . ' ';
+        $query .= ' FROM ' . $this->db->quoteIdentifier($query_array['tableName']) . ' ';
 
         return $query;
     }
@@ -2538,6 +2481,93 @@ class AOR_Report extends Basic
         }
 
         return $query;
+    }
+
+    /**
+     * @param $chartIds
+     * @param $chartType
+     * @param $data
+     * @param $fields
+     * @param $mainGroupField
+     * @return string
+     */
+    private function StartBuildChartHTML($chartIds, $chartType, $data, $fields, $mainGroupField)
+    {
+        switch ($chartType) {
+            case self::CHART_TYPE_PCHART:
+                $html = '<script src="modules/AOR_Charts/lib/pChart/imagemap.js"></script>';
+                break;
+            case self::CHART_TYPE_CHARTJS:
+                $html = '<script src="modules/AOR_Reports/js/Chart.js"></script>';
+                break;
+            case self::CHART_TYPE_RGRAPH:
+                if ($_REQUEST['module'] != 'Home') {
+                    require_once('include/SuiteGraphs/RGraphIncludes.php');
+                }
+
+                break;
+        }
+        $x = 0;
+
+        $linkedCharts = $this->get_linked_beans('aor_charts', 'AOR_Charts');
+        if (!$linkedCharts) {
+            //No charts to display
+            return '';
+        }
+
+        foreach ($linkedCharts as $chart) {
+            if ($chartIds !== null && !in_array($chart->id, $chartIds)) {
+                continue;
+            }
+            $html .= $chart->buildChartHTML($data, $fields, $x, $chartType, $mainGroupField);
+            $x++;
+        }
+
+        return $html;
+    }
+
+    /**
+     * @return bool|resource
+     */
+    private function getResultRows()
+    {
+        $sql = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY field_order ASC";
+        $result = $this->db->query($sql);
+        $ResultRowArray = array();
+        while ($row = $this->db->fetchByAssoc($result)) {
+            array_push($ResultRowArray, $row);
+        }
+
+        return $ResultRowArray;
+    }
+
+    /**
+     * @param $rowArray
+     * @param $mainGroupField
+     * @return AOR_Field
+     */
+    private function getMainGroupSet($rowArray)
+    {
+        $mainGroupField = 'NOTSET';
+        foreach ($rowArray as $row) {
+
+            $field = new AOR_Field();
+            $field->retrieve($row['id']);
+
+            // get the main group
+
+            if ($field->group_display) {
+
+                // if we have a main group already thats wrong cause only one main grouping field possible
+                if ( $mainGroupField=='NOTSET') {
+                    $GLOBALS['log']->fatal('main group already found');
+                }
+
+                $mainGroupField = $field;
+            }
+        }
+
+        return $mainGroupField;
     }
 
 }
