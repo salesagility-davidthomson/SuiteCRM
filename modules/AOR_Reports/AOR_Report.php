@@ -1079,9 +1079,9 @@ class AOR_Report extends Basic
 
 
         $query = '';
-        $query_array = array();
 
-        $query_array = $this->buildQueryArraySelectForChart($beanList, $timedate, $query_array, $group_value);
+
+        $query_array = $this->buildQueryArraySelectForChart($beanList, $timedate, $group_value);
 
         try {
             $query_array = $this->buildQueryArrayWhere($query_array, $extra);
@@ -1113,36 +1113,40 @@ class AOR_Report extends Basic
      * @param string $group_value
      * @return array
      */
-    public function buildQueryArraySelectForChart($beanList, $timedate,$query = array(), $group_value = '')
+    public function buildQueryArraySelectForChart($beanList, $timedate, $group_value = '')
     {
 
-        $chartbean = BeanFactory::newBean('AOR_Charts');
+        $module = false;
+        $queryArray = array();
 
-        $sql = "SELECT id FROM aor_charts WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY name ASC";
-        $row = $this->db->fetchOne($sql);
+        $ModuleBeanExists = $beanList[$this->report_module];
+        if ($ModuleBeanExists) {
+            $module = new $ModuleBeanExists();
+            $queryArray['tableName'] = $module->table_name;
+            $queryArray['id_select'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id AS '" . $module->table_name . "_id'";
+            $queryArray['id_select_group'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id";
+        }
 
+        $sql1 = "SELECT id FROM aor_charts WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY name ASC";
+        $row = $this->db->fetchOne($sql1);
         $ChartRow = new AOR_Chart();
         $ChartRow->retrieve($row['id']);
+        if ($module) {
+            $sql2 = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 AND (field_order = $ChartRow->x_field OR field_order = $ChartRow->y_field) ORDER BY field_order ASC";
+            $result = $this->db->query($sql2);
+            $rowArray = array();
+            while($row = $this->db->fetchByAssoc($result)){
+                array_push($rowArray, $row);
+            }
 
-        if ($beanList[$this->report_module]) {
-            $module = new $beanList[$this->report_module]();
-            $query['tableName'] = $module->table_name;
-            $query['id_select'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id AS '" . $module->table_name . "_id'";
-            $query['id_select_group'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id";
-
-            $sql = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 AND (field_order = $ChartRow->x_field OR field_order = $ChartRow->y_field) ORDER BY field_order ASC";
-
-            $result = $this->db->query($sql);
-
-            $i = 0;//not used only for testing dt
-
-            while ($row = $this->db->fetchByAssoc($result)) {
-                $query = $this->createQuery($query, $group_value, $row, $i, $module, $beanList, $timedate);
+            $i = 0;
+            foreach($rowArray as $row){
+                $queryArray = $this->createQuery($queryArray, $group_value, $row, $i, $module, $beanList, $timedate);
                 ++$i;
             }
         }
 
-        return $query;
+        return $queryArray;
     }
 
     /**
