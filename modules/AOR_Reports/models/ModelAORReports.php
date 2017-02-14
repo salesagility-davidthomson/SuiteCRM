@@ -10,6 +10,7 @@ use modules\AOR_Reports\models\report\ReportFactory;
 
 include_once __DIR__.DIRECTORY_SEPARATOR.'..'.DIRECTORY_SEPARATOR.'rootPath.php';
 include_once ROOTPATH.'/data/BeanFactory.php';
+include_once ROOTPATH.'/modules/AOR_Charts/AOR_Chart.php';
 
 class ModelAORReports
 {
@@ -46,6 +47,31 @@ class ModelAORReports
         }
         return $parameters;
     }
+
+
+    public function getChartObject($reportId, $bean){
+        $sql1 = "SELECT id FROM aor_charts WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 ORDER BY name ASC";
+        $row = $bean->db->fetchOne($sql1);
+        $ChartObj = new \AOR_Chart();
+        $ChartObj->retrieve($row['id']);
+        return $ChartObj;
+    }
+
+    public function getChartDataArray($reportId, $bean)
+    {
+        $ChartObj = $this->getChartObject($reportId, $bean);
+
+        $sql2 = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 AND (field_order = $ChartObj->x_field OR field_order = $ChartObj->y_field) ORDER BY field_order ASC";
+        $result = $bean->db->query($sql2);
+        $rowArray = array();
+        while ($row = $bean->db->fetchByAssoc($result)) {
+            array_push($rowArray, $row);
+        }
+
+        return $rowArray;
+    }
+
+
 
 
     /**

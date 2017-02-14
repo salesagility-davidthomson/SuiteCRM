@@ -441,12 +441,12 @@ class AOR_Report extends Basic
             } catch (Exception $e) {
             }
 
-            $query = $this->buildQuerySelect($query_array, $query);
+            $query = $this->buildSqlQuerySelect($query_array, $query);
 
             $query .= ' FROM ' . $module->table_name . ' ';
 
-            $query = $this->buildQueryJoin($query_array, $query);
-            $query = $this->buildQueryWhere($query_array, $query);
+            $query = $this->buildSqlQueryJoin($query_array, $query);
+            $query = $this->buildSqlQueryWhere($query_array, $query);
 
             if (isset($query_array['group_by'])) {
                 $query_group_by = '';
@@ -456,7 +456,7 @@ class AOR_Report extends Basic
                 $query .= ' ' . $query_group_by;
             }
 
-            $query = $this->buildQuerySortBy($query_array, $query);
+            $query = $this->buildSqlQuerySortBy($query_array, $query);
             $result = $this->db->query($query);
 
             while ($row = $this->db->fetchByAssoc($result)) {
@@ -986,19 +986,19 @@ class AOR_Report extends Basic
             throw new Exception('Caught exception:' . $e->getMessage(), $e->getCode());
         }
 
-        $sqlQuery = $this->buildQuerySelect($query_array, $sqlQuery);
+        $sqlQuery = $this->buildSqlQuerySelect($query_array, $sqlQuery);
 
-        $sqlQuery = $this->buildQueryGroupBy($query_array, $sqlQuery);
+        $sqlQuery = $this->buildSqlQueryGroupBy($query_array, $sqlQuery);
 
-        $sqlQuery = $this->buildQueryFrom($query_array, $sqlQuery);
+        $sqlQuery = $this->buildSqlQueryFrom($query_array, $sqlQuery);
 
-        $sqlQuery = $this->buildQueryJoin($query_array, $sqlQuery);
+        $sqlQuery = $this->buildSqlQueryJoin($query_array, $sqlQuery);
 
-        $sqlQuery = $this->buildQueryWhere($query_array, $sqlQuery);
+        $sqlQuery = $this->buildSqlQueryWhere($query_array, $sqlQuery);
 
-        $sqlQuery = $this->buildQueryGroupBy2($query_array, $sqlQuery);
+        $sqlQuery = $this->buildSqlQueryGroupBy2($query_array, $sqlQuery);
 
-        $sqlQuery = $this->buildQuerySortBy($query_array, $sqlQuery);
+        $sqlQuery = $this->buildSqlQuerySortBy($query_array, $sqlQuery);
 
         return $sqlQuery;
 
@@ -1068,19 +1068,21 @@ class AOR_Report extends Basic
 
     public function buildReportQueryChart($beanList, $timedate, $group_value = '', $extra = array())
     {
+        $model = new Model();
 
+        $moduleName = $this->report_module;
 
         //Check if the user has access to the target module
-        if (!(ACLController::checkAccess($this->report_module, 'list', true))) {
-            throw new Exception('User Not Allowed Access To This Module', 101);
+        if (!(ACLController::checkAccess($moduleName, 'list', true))) {
+            throw new Exception('AOR_Report:buildReportQueryChart: User Not Allowed Access To This Module', 101);
         }
 
 
 
         $query = '';
 
-
-        $query_array = $this->buildQueryArraySelectForChart($beanList, $timedate, $group_value);
+        $reportId = $this->id;
+        $query_array = $this->buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, $model, $group_value);
 
         try {
             $query_array = $this->buildQueryArrayWhere($query_array, $extra);
@@ -1088,19 +1090,19 @@ class AOR_Report extends Basic
             throw new Exception('Caught exception:' . $e->getMessage(), $e->getCode());
         }
 
-        $query = $this->buildQuerySelect($query_array, $query);
+        $query = $this->buildSqlQuerySelect($query_array, $query);
 
-        $query = $this->buildQueryGroupBy($query_array, $query);
+        $query = $this->buildSqlQueryGroupBy($query_array, $query);
 
-        $query = $this->buildQueryFrom($query_array, $query);
+        $query = $this->buildSqlQueryFrom($query_array, $query);
 
-        $query = $this->buildQueryJoin($query_array, $query);
+        $query = $this->buildSqlQueryJoin($query_array, $query);
 
-        $query = $this->buildQueryWhere($query_array, $query);
+        $query = $this->buildSqlQueryWhere($query_array, $query);
 
-        $query = $this->buildQueryGroupBy2($query_array, $query);
+        $query = $this->buildSqlQueryGroupBy2($query_array, $query);
 
-        $query = $this->buildQuerySortBy($query_array, $query);
+        $query = $this->buildSqlQuerySortBy($query_array, $query);
 
         return $query;
 
@@ -1108,44 +1110,42 @@ class AOR_Report extends Basic
 
 
     /**
-     * @param array $query
+     * @param $beanList
+     * @param $moduleName
+     * @param $timedate
+     * @param $reportId
      * @param string $group_value
      * @return array
+     * @throws Exception
+     * @internal param array $query
      */
-    public function buildQueryArraySelectForChart($beanList, $timedate, $group_value = '')
+    public function buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, Model $model, $group_value = '')
     {
-
         $module = false;
         $queryDataArray = array();
+        $module = $beanList[$moduleName];
 
-        $ModuleBeanExists = $beanList[$this->report_module];
-        if ($ModuleBeanExists) {
-            $module = new $ModuleBeanExists();
-            $queryDataArray['tableName'] = $module->table_name;
-            $queryDataArray['id_select'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id AS '" . $module->table_name . "_id'";
-            $queryDataArray['id_select_group'][$module->table_name] = $this->db->quoteIdentifier($module->table_name) . ".id";
+        if($module === null){
+            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
         }
+        try {
+            $bean = new $beanList[$moduleName];
 
-        $sql1 = "SELECT id FROM aor_charts WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY name ASC";
-        $row = $this->db->fetchOne($sql1);
-        $ChartRow = new AOR_Chart();
-        $ChartRow->retrieve($row['id']);
-        if ($module) {
-            $sql2 = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 AND (field_order = $ChartRow->x_field OR field_order = $ChartRow->y_field) ORDER BY field_order ASC";
-            $result = $this->db->query($sql2);
-            $rowArray = array();
-            while($row = $this->db->fetchByAssoc($result)){
-                array_push($rowArray, $row);
-            }
+            $queryDataArray = $this->DataArrayGetTableData($queryDataArray, $bean);
+
+            $rowArray = $model->getChartDataArray($reportId,$bean);
 
             $i = 0;
             foreach($rowArray as $row){
                 $queryDataArray = $this->createQueryDataArray($queryDataArray, $group_value, $row, $i, $module, $beanList, $timedate);
                 ++$i;
             }
-        }
 
-        return $queryDataArray;
+            return $queryDataArray;
+
+        } catch (Exception $e) {
+            throw new Exception('Exception Caught :'.$e->getMessage(),$e->getCode());
+        }
     }
 
     /**
@@ -1334,7 +1334,7 @@ class AOR_Report extends Basic
 
             //checkIfUserIsAllowAccessToModule
             if (!$this->checkIfUserIsAllowedAccessToRelatedModules($rowArray, $module, $beanList)) {
-                throw new Exception('User Not Allowed Access To Module', 102);
+                throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$module, 102);
             }
 
 
@@ -1700,11 +1700,11 @@ class AOR_Report extends Basic
             $query = $this->buildReportQueryJoin($table_alias . '_cstm', $table_alias . '_cstm',
                 $table_alias, $field_module, 'custom', $query);
 
-            return array($data, $select_field, $query);
+            return array($select_field, $query);
         } else {
             $select_field = $this->db->quoteIdentifier($table_alias) . '.' . $field->field;
 
-            return array($data, $select_field, $query);
+            return array($select_field, $query);
         }
     }
 
@@ -1833,17 +1833,17 @@ class AOR_Report extends Basic
         list($oldAlias, $table_alias, $queryArray, $field_module) = $this->BuildJoinsForEachExternalRelatedField($queryArray,
             $field, $module, $beanList, $field_module, $table_alias, $oldAlias);
 
-        $data = $this->BuildDataForRelateType($field_module, $field);
+        $dataArray = $this->BuildDataForRelateType($field_module, $field);
 
-        list($table_alias, $queryArray, $field_module) = $this->BuildDataForLinkType($queryArray, $data, $beanList,
+        list($table_alias, $queryArray, $field_module) = $this->BuildDataForLinkType($queryArray, $dataArray, $beanList,
             $field_module, $oldAlias, $field, $table_alias);
 
-        $queryArray = $this->BuildDataForCurrencyType($queryArray, $data, $field_module, $table_alias);
+        $queryArray = $this->BuildDataForCurrencyType($queryArray, $dataArray, $field_module, $table_alias);
 
-        list($data, $select_field, $queryArray) = $this->BuildDataForCustomField($queryArray, $data, $table_alias, $field,
+        list($select_field, $queryArray) = $this->BuildDataForCustomField($queryArray, $dataArray, $table_alias, $field,
             $field_module);
 
-        $select_field = $this->BuildDataForDateType($field, $data, $select_field, $timedate);
+        $select_field = $this->BuildDataForDateType($field, $dataArray, $select_field, $timedate);
 
         $queryArray = $this->SetTableAlias($queryArray, $field, $table_alias);
 
@@ -2363,7 +2363,7 @@ class AOR_Report extends Basic
      * @param $query
      * @return array
      */
-    private function buildQuerySelect($query_array, $query)
+    private function buildSqlQuerySelect($query_array, $query)
     {
         foreach ($query_array['select'] as $select) {
             $query .= ($query == '' ? 'SELECT ' : ', ') . $select;
@@ -2377,7 +2377,7 @@ class AOR_Report extends Basic
      * @param $query
      * @return array
      */
-    private function buildQueryGroupBy($query_array, $query)
+    private function buildSqlQueryGroupBy($query_array, $query)
     {
         if (empty($query_array['group_by'])) {
             foreach ($query_array['id_select'] as $select) {
@@ -2396,7 +2396,7 @@ class AOR_Report extends Basic
      * @return string
      * @internal param $module
      */
-    private function buildQueryFrom($query_array, $query)
+    private function buildSqlQueryFrom($query_array, $query)
     {
         $query .= ' FROM ' . $this->db->quoteIdentifier($query_array['tableName']) . ' ';
 
@@ -2408,7 +2408,7 @@ class AOR_Report extends Basic
      * @param $query
      * @return array
      */
-    private function buildQueryJoin($query_array, $query)
+    private function buildSqlQueryJoin($query_array, $query)
     {
         if (isset($query_array['join'])) {
             foreach ($query_array['join'] as $join) {
@@ -2426,7 +2426,7 @@ class AOR_Report extends Basic
      * @param $query
      * @return array
      */
-    private function buildQueryWhere($query_array, $query)
+    private function buildSqlQueryWhere($query_array, $query)
     {
         if (isset($query_array['where'])) {
             $query_where = '';
@@ -2447,7 +2447,7 @@ class AOR_Report extends Basic
      * @param $query
      * @return array
      */
-    private function buildQueryGroupBy2($query_array, $query)
+    private function buildSqlQueryGroupBy2($query_array, $query)
     {
         if (isset($query_array['group_by'])) {
             $query_group_by = '';
@@ -2472,7 +2472,7 @@ class AOR_Report extends Basic
      * @param $query
      * @return string
      */
-    private function buildQuerySortBy($query_array, $query)
+    private function buildSqlQuerySortBy($query_array, $query)
     {
         if (isset($query_array['sort_by'])) {
             $query_sort_by = '';
@@ -2572,6 +2572,38 @@ class AOR_Report extends Basic
         }
 
         return $mainGroupField;
+    }
+
+    /**
+     * @param $queryDataArray
+     * @param $bean
+     * @return array
+     * @internal param $moduleName
+     */
+    private function DataArrayGetTableData($queryDataArray, $bean)
+    {
+        $queryDataArray['tableName'] = $bean->table_name;
+        $queryDataArray['id_select'][$bean->table_name] = $this->db->quoteIdentifier($bean->table_name) . ".id AS '" . $bean->table_name . "_id'";
+        $queryDataArray['id_select_group'][$bean->table_name] = $this->db->quoteIdentifier($bean->table_name) . ".id";
+
+        return $queryDataArray;
+    }
+
+    /**
+     * @param $reportId
+     * @param $ChartObj
+     * @return array
+     */
+    private function getChartDataArray($reportId, $ChartObj)
+    {
+        $sql2 = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 AND (field_order = $ChartObj->x_field OR field_order = $ChartObj->y_field) ORDER BY field_order ASC";
+        $result = $this->db->query($sql2);
+        $rowArray = array();
+        while ($row = $this->db->fetchByAssoc($result)) {
+            array_push($rowArray, $row);
+        }
+
+        return $rowArray;
     }
 
 }
