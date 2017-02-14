@@ -1045,7 +1045,7 @@ class AOR_Report extends Basic
         $mainGroupField = null;
         $fields = array();
 
-        $this->createLabels($result, $beanList, $fields, $mainGroupField, $row);
+        list($fields, $mainGroupField) = $this->createLabels($result, $beanList, $fields, $mainGroupField);
 
         try {
             $query = $this->buildReportQueryChart();//this is where it needs to branch one report for normal queries and one for charts
@@ -1519,9 +1519,8 @@ class AOR_Report extends Basic
     private function createLabels(
         $result,
         $beanList,
-        &$fields,
-        &$mainGroupField,
-        &$row
+        $fields,
+        $mainGroupField
     ) {
         $i = 0;
 
@@ -1571,6 +1570,8 @@ class AOR_Report extends Basic
 
             ++$i;
         }
+
+        return array($fields, $mainGroupField);
     }
 
     /**
