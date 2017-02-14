@@ -211,10 +211,9 @@ class AOR_ReportTest extends PHPUnit_Framework_TestCase
     {
         $aor_Report = new AOR_Report();
         $aor_Report->report_module = 'Accounts';
-        $query_array = array();
 
         //execute the method with parameters and verify that it returns an array.
-        $actual = $aor_Report->buildReportQuerySelect($query_array, 'name');
+        $actual = $aor_Report->buildReportQuerySelect('name');
         $this->assertTrue(is_array($actual));
     }
 
