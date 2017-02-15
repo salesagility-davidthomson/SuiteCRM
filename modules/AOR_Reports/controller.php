@@ -661,11 +661,9 @@ class AOR_ReportsController extends SugarController {
 
     protected function action_DetailView(){
         $this->view = 'detail';
-        global $beanList;
         $model = new Model();
-
+//        global $beanList;
 //        $chartReport = $model->buildReportChart($this->bean, $beanList, null, AOR_Report::CHART_TYPE_RGRAPH);
-//
 //        die('here');
 
         $reportParams =$model->getReportParameters($this->bean);
