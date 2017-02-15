@@ -1146,6 +1146,7 @@ class AOR_Report extends Basic
                 'tableAlias'=>null,
                 'oldAlias'=>null,
                 'timeDate'=>null,
+                'selectField'=>null
             );
 
             $dataObject['queryArray'] = $queryDataArray;
@@ -1275,11 +1276,7 @@ class AOR_Report extends Basic
     }
 
 
-    public function buildReportQueryJoinChart(
-        &$dataObject,
-        $relationship,
-        $type = 'relationship'
-    ) {
+    public function buildReportQueryJoinChart(&$dataObject, $relationship, $type = 'relationship') {
 
 //        $name,//$relationship
 //        $alias,//$table_alias
@@ -1735,22 +1732,20 @@ class AOR_Report extends Basic
      * @param $field
      * @return mixed
      */
-    private function BuildDataForRelateTypeChart(
-        $dataObject
-    ) {
+    private function BuildDataForRelateTypeChart(&$dataObject) {
         $field = $dataObject['field'];
         $field_module = $dataObject['fieldModule'];
-        $data = $field_module->field_defs[$field->field];
-        if ($data['type'] == 'relate' && isset($data['id_name'])) {
-            $field->field = $data['id_name'];
-            $data_new = $field_module->field_defs[$field->field];
-            if (isset($data_new['source']) && $data_new['source'] == 'non-db' && $data_new['type'] != 'link' && isset($data['link'])) {
-                $data_new['type'] = 'link';
-                $data_new['relationship'] = $data['link'];
+        $dataArray = $field_module->field_defs[$field->field];
+        if ($dataArray['type'] == 'relate' && isset($dataArray['id_name'])) {
+            $field->field = $dataArray['id_name'];
+            $dataArray_new = $field_module->field_defs[$field->field];
+            if (isset($dataArray_new['source']) && $dataArray_new['source'] == 'non-db' && $dataArray_new['type'] != 'link' && isset($dataArray['link'])) {
+                $dataArray_new['type'] = 'link';
+                $dataArray_new['relationship'] = $dataArray['link'];
             }
-            $data = $data_new;
+            $dataArray = $dataArray_new;
         }
-        $dataObject['dataArray'] = $data;
+        $dataObject['dataArray'] = $dataArray;
     }
 
     /**
@@ -1798,30 +1793,28 @@ class AOR_Report extends Basic
      * @param $table_alias
      * @return array
      */
-    private function BuildDataForLinkTypeChart(
-        $dataObject
-    ) {
+    private function BuildDataForLinkTypeChart(&$dataObject) {
 
-        $query = $dataObject['queryArray'];
-        $data = $dataObject['dataArray'];
+        $queryArray = $dataObject['queryArray'];
+        $dataArray = $dataObject['dataArray'];
         $beanList = $dataObject['beanList'];
         $field_module = $dataObject['fieldModule'];
         $oldAlias = $dataObject['oldAlias'];
         $field = $dataObject['field'];
         $table_alias = $dataObject['tableAlias'];
-        if ($data['type'] == 'link' && $data['source'] == 'non-db') {
+        if ($dataArray['type'] == 'link' && $dataArray['source'] == 'non-db') {
             $new_field_module = new $beanList[getRelatedModule($field_module->module_dir,
-                $data['relationship'])];
-            $table_alias = $data['relationship'];
-            $query = $this->buildReportQueryJoin($data['relationship'], $table_alias, $oldAlias,
-                $field_module, 'relationship', $query, $new_field_module);
+                $dataArray['relationship'])];
+            $table_alias = $dataArray['relationship'];
+            $queryArray = $this->buildReportQueryJoin($dataArray['relationship'], $table_alias, $oldAlias,
+                $field_module, 'relationship', $queryArray, $new_field_module);
             $field_module = $new_field_module;
             $field->field = 'id';
 
-            return array($table_alias, $query, $field_module);
+            return array($table_alias, $queryArray, $field_module);
         }
 
-        return array($table_alias, $query, $field_module);
+        return array($table_alias, $queryArray, $field_module);
     }
 
 
@@ -1864,27 +1857,28 @@ class AOR_Report extends Basic
      * @param $table_alias
      * @return mixed
      */
-    private function BuildDataForCurrencyTypeChart(
-        $query,
-        $data,
-        $field_module,
-        $table_alias
-    ) {
-        if ($data['type'] == 'currency' && isset($field_module->field_defs['currency_id'])) {
+    private function BuildDataForCurrencyTypeChart(&$dataObject) {
+
+        $queryArray = $dataObject['queryArray'];
+        $dataArray = $dataObject['dataArray'];
+        $field_module = $dataObject['fieldModule'];
+        $table_alias = $dataObject['tableAlias'];
+        
+        if ($dataArray['type'] == 'currency' && isset($field_module->field_defs['currency_id'])) {
             if ((isset($field_module->field_defs['currency_id']['source']) && $field_module->field_defs['currency_id']['source'] == 'custom_fields')) {
-                $query['select'][$table_alias . '_currency_id'] = $this->db->quoteIdentifier($table_alias . '_cstm') . ".currency_id AS '" . $table_alias . "_currency_id'";
-                $query['second_group_by'][] = $this->db->quoteIdentifier($table_alias . '_cstm') . ".currency_id";
+                $queryArray['select'][$table_alias . '_currency_id'] = $this->db->quoteIdentifier($table_alias . '_cstm') . ".currency_id AS '" . $table_alias . "_currency_id'";
+                $queryArray['second_group_by'][] = $this->db->quoteIdentifier($table_alias . '_cstm') . ".currency_id";
 
-                return $query;
+                return $queryArray;
             } else {
-                $query['select'][$table_alias . '_currency_id'] = $this->db->quoteIdentifier($table_alias) . ".currency_id AS '" . $table_alias . "_currency_id'";
-                $query['second_group_by'][] = $this->db->quoteIdentifier($table_alias) . ".currency_id";
+                $queryArray['select'][$table_alias . '_currency_id'] = $this->db->quoteIdentifier($table_alias) . ".currency_id AS '" . $table_alias . "_currency_id'";
+                $queryArray['second_group_by'][] = $this->db->quoteIdentifier($table_alias) . ".currency_id";
 
-                return $query;
+
             }
         }
+        $dataObject['queryArray']=$queryArray;
 
-        return $query;
     }
 
     /**
@@ -1925,24 +1919,24 @@ class AOR_Report extends Basic
      * @param $field_module
      * @return array
      */
-    private function BuildDataForCustomFieldChart(
-        $query,
-        $data,
-        $table_alias,
-        $field,
-        $field_module
-    ) {
-        if ((isset($data['source']) && $data['source'] == 'custom_fields')) {
-            $select_field = $this->db->quoteIdentifier($table_alias . '_cstm') . '.' . $field->field;
-            $query = $this->buildReportQueryJoin($table_alias . '_cstm', $table_alias . '_cstm',
-                $table_alias, $field_module, 'custom', $query);
+    private function BuildDataForCustomFieldChart(&$dataObject) {
 
-            return array($select_field, $query);
+        $queryArray = $dataObject['queryArray'];
+        $dataArray = $dataObject['dataArray'];
+        $table_alias = $dataObject['tableAlias'];
+        $field = $dataObject['field'];
+        $field_module = $dataObject['fieldModule'];
+        if ((isset($dataArray['source']) && $dataArray['source'] == 'custom_fields')) {
+            $select_field = $this->db->quoteIdentifier($table_alias . '_cstm') . '.' . $field->field;
+            $queryArray = $this->buildReportQueryJoin($table_alias . '_cstm', $table_alias . '_cstm',
+                $table_alias, $field_module, 'custom', $queryArray);
         } else {
             $select_field = $this->db->quoteIdentifier($table_alias) . '.' . $field->field;
-
-            return array($select_field, $query);
         }
+
+        $dataObject['selectField'] = $select_field;
+        $dataObject['queryArray'] = $queryArray;
+
     }
 
 
@@ -1979,23 +1973,20 @@ class AOR_Report extends Basic
      * @param $timedate
      * @return string
      */
-    private function BuildDataForDateTypeChart(
-        $field,
-        $data,
-        $select_field,
-        $timedate
-    ) {
+    private function BuildDataForDateTypeChart(&$dataObject) {
+        $field = $dataObject['field'];
+        $data = $dataObject['dataArray'];
+        $select_field = $dataObject['selectField'];
+        $timedate =$dataObject['timeDate'];
+
         if ($field->format && in_array($data['type'], array('date', 'datetime', 'datetimecombo'))) {
             if (in_array($data['type'], array('datetime', 'datetimecombo'))) {
                 $select_field = $this->db->convert($select_field, 'add_tz_offset');
             }
             $select_field = $this->db->convert($select_field, 'date_format',
                 array($timedate->getCalFormat($field->format)));
-
-            return $select_field;
         }
-
-        return $select_field;
+        $dataObject['selectField'] = $select_field;
     }
 
     /**
@@ -2190,15 +2181,17 @@ class AOR_Report extends Basic
     ) {
 
 //        $dataObject = array(
-//            'beanList'=>null,
-//            'queryArray'=>null,
-//            'sqlQuery'=>null,
-//            'field'=>null,
-//            'module'=>null,
-//            'fieldModule'=>null,
-//            'tableAlias'=>null,
-//            'oldAlias'=>null,
-//            'timeDate'=>null,
+//                'beanList'=>null,
+//                'queryArray'=>null,
+//                'sqlQuery'=>null,
+//                'dataArray'=>null,
+//                'field'=>null,
+//                'module'=>null,
+//                'fieldModule'=>null,
+//                'tableAlias'=>null,
+//                'oldAlias'=>null,
+//                'timeDate'=>null,
+//                'selectField'=>null
 //        );
 
 
@@ -2228,20 +2221,21 @@ class AOR_Report extends Basic
 
         $this->BuildDataForLinkTypeChart($dataObject);
 
+        $this->BuildDataForCurrencyTypeChart($dataObject);
+
+        $this->BuildDataForCustomFieldChart($dataObject);
+
+        $this->BuildDataForDateTypeChart($dataObject);
 
 
         $queryArray = $dataObject['queryArray'];
-        $dataArray = $dataObject['dataArray'];
-        $field_module = $dataObject['fieldModule'];
-        $table_alias = $dataObject['tableAlias'];
-        $queryArray = $this->BuildDataForCurrencyTypeChart($queryArray, $dataArray, $field_module, $table_alias);
-
-        list($select_field, $queryArray) = $this->BuildDataForCustomFieldChart($queryArray, $dataArray, $table_alias, $field,
-            $field_module);
-
-        $select_field = $this->BuildDataForDateTypeChart($field, $dataArray, $select_field, $timedate);
+        $field = $dataObject['field'];
+        $table_alias =$dataObject['tableAlias'];
 
         $queryArray = $this->SetTableAliasChart($queryArray, $field, $table_alias);
+
+        $field = $dataObject['field'];
+        $select_field = $dataObject['selectField'];
 
         list($queryArray, $select_field) = $this->SetGroupByChart($queryArray, $field, $select_field);
 
