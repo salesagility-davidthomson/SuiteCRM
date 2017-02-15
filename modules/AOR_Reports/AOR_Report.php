@@ -1139,6 +1139,7 @@ class AOR_Report extends Basic
                 'beanList'=>null,
                 'queryArray'=>null,
                 'sqlQuery'=>null,
+                'dataArray'=>null,
                 'field'=>null,
                 'module'=>null,
                 'fieldModule'=>null,
@@ -1735,9 +1736,10 @@ class AOR_Report extends Basic
      * @return mixed
      */
     private function BuildDataForRelateTypeChart(
-        $field_module,
-        $field
+        $dataObject
     ) {
+        $field = $dataObject['field'];
+        $field_module = $dataObject['fieldModule'];
         $data = $field_module->field_defs[$field->field];
         if ($data['type'] == 'relate' && isset($data['id_name'])) {
             $field->field = $data['id_name'];
@@ -1747,11 +1749,8 @@ class AOR_Report extends Basic
                 $data_new['relationship'] = $data['link'];
             }
             $data = $data_new;
-
-            return $data;
         }
-
-        return $data;
+        $dataObject['dataArray'] = $data;
     }
 
     /**
@@ -1800,14 +1799,16 @@ class AOR_Report extends Basic
      * @return array
      */
     private function BuildDataForLinkTypeChart(
-        $query,
-        $data,
-        $beanList,
-        $field_module,
-        $oldAlias,
-        $field,
-        $table_alias
+        $dataObject
     ) {
+
+        $query = $dataObject['queryArray'];
+        $data = $dataObject['dataArray'];
+        $beanList = $dataObject['beanList'];
+        $field_module = $dataObject['fieldModule'];
+        $oldAlias = $dataObject['oldAlias'];
+        $field = $dataObject['field'];
+        $table_alias = $dataObject['tableAlias'];
         if ($data['type'] == 'link' && $data['source'] == 'non-db') {
             $new_field_module = new $beanList[getRelatedModule($field_module->module_dir,
                 $data['relationship'])];
@@ -2204,7 +2205,7 @@ class AOR_Report extends Basic
 //        list($oldAlias, $table_alias, $queryArray, $field_module) = $this->BuildJoinsForEachExternalRelatedFieldChart($dataObject);
 
 
-        $field = $dataObject['$field'];
+        $field = $dataObject['field'];
         $module = $dataObject['module'];
 
         // --- sql query building
@@ -2214,11 +2215,7 @@ class AOR_Report extends Basic
         $PathIsNotModuleDir = $path[0] != $module->module_dir;
         if ($pathExists && $PathIsNotModuleDir) {
             foreach ($path as $relationship) {
-                $this->buildReportQueryJoinChart(
-                    $dataObject,
-                    $relationship,
-                    'relationship'
-                );
+                $this->buildReportQueryJoinChart($dataObject,$relationship,'relationship');
             }
 
         }
@@ -2227,32 +2224,16 @@ class AOR_Report extends Basic
 
 
         // --- data queryArray building
+        $this->BuildDataForRelateTypeChart($dataObject);
 
-        $field = $dataObject['$field'];
-        $field_module = $dataObject['fieldModule'];
-        $dataArray = $this->BuildDataForRelateTypeChart($field_module, $field);
+        $this->BuildDataForLinkTypeChart($dataObject);
 
 
 
         $queryArray = $dataObject['queryArray'];
-//        $dataArray = $dataObject[''];
-        $beanList = $dataObject['beanList'];
+        $dataArray = $dataObject['dataArray'];
         $field_module = $dataObject['fieldModule'];
-        $oldAlias = $dataObject['oldAlias'];
-        $field = $dataObject['field'];
         $table_alias = $dataObject['tableAlias'];
-
-        list($table_alias, $queryArray, $field_module) =
-            $this->BuildDataForLinkTypeChart(
-                $queryArray,
-                $dataArray,
-                $beanList,
-                $field_module,
-                $oldAlias,
-                $field,
-                $table_alias
-            );
-
         $queryArray = $this->BuildDataForCurrencyTypeChart($queryArray, $dataArray, $field_module, $table_alias);
 
         list($select_field, $queryArray) = $this->BuildDataForCustomFieldChart($queryArray, $dataArray, $table_alias, $field,
