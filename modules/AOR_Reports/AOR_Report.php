@@ -2107,18 +2107,14 @@ class AOR_Report extends Basic
      * @param $select_field
      * @return mixed
      */
-    private function SetSortByChart(
-        $query,
-        $field,
-        $select_field
-    ) {
+    private function SetSortByChart(&$dataObject) {
+        $queryArray = $dataObject['queryArray'];
+        $field = $dataObject['field'];
+        $select_field = $dataObject['selectField'];
         if ($field->sort_by != '') {
-            $query['sort_by'][] = $select_field . " " . $field->sort_by;
-
-            return $query;
+            $queryArray['sort_by'][] = $select_field . " " . $field->sort_by;
         }
-
-        return $query;
+        $dataObject['queryArray'] = $queryArray;
     }
 
     private function createQueryDataArray(
@@ -2225,12 +2221,11 @@ class AOR_Report extends Basic
 
         $this->SetGroupByChart($dataObject);
 
+        $this->SetSortByChart($dataObject);
+
         $queryArray = $dataObject['queryArray'];
-        $field = $dataObject['field'];
         $select_field = $dataObject['selectField'];
-
-        $queryArray = $this->SetSortByChart($queryArray, $field, $select_field);
-
+        $field = $dataObject['field'];
         $queryArray['select'][] = $select_field . " AS '" . $field->label . "'";
 
         //disabled as not being set for chart creation will look into this for duplicate code createQueryDataArray
