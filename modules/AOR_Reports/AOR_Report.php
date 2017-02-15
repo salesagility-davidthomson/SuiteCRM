@@ -1302,16 +1302,16 @@ class AOR_Report extends Basic
         $name = $relationship;
         $beanList = $dataObject['beanList'];
         $field_module = $dataObject['fieldModule'];
-        $rel_module = new $beanList[getRelatedModule($field_module->module_dir, $relationship)];
-        $alias  = $dataObject['tableAlias'];
+        $related_module = new $beanList[getRelatedModule($field_module->module_dir, $relationship)];
+        $tableAlias  = $dataObject['tableAlias'];
         $parentAlias = $dataObject['oldAlias'];
-        $alias = $alias . ":" . $alias;
+        $tableAlias = $tableAlias . ":" . $tableAlias;
 
-        if (!isset($query['join'][$alias])) {
+        if (!isset($query['join'][$tableAlias])) {
 
             switch ($type) {
                 case 'custom':
-                    $query['join'][$alias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($module->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($name) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($name) . '.id_c ';
+                    $query['join'][$tableAlias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($module->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($name) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($name) . '.id_c ';
                     break;
 
                 case 'relationship':
@@ -1319,29 +1319,29 @@ class AOR_Report extends Basic
                         $params['join_type'] = 'LEFT JOIN';
                         if ($module->$name->relationship_type != 'one-to-many') {
                             if ($module->$name->getSide() == REL_LHS) {
-                                $params['right_join_table_alias'] = $this->db->quoteIdentifier($alias);
-                                $params['join_table_alias'] = $this->db->quoteIdentifier($alias);
+                                $params['right_join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
+                                $params['join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
                                 $params['left_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
                             } else {
                                 $params['right_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
-                                $params['join_table_alias'] = $this->db->quoteIdentifier($alias);
-                                $params['left_join_table_alias'] = $this->db->quoteIdentifier($alias);
+                                $params['join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
+                                $params['left_join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
                             }
 
                         } else {
                             $params['right_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
-                            $params['join_table_alias'] = $this->db->quoteIdentifier($alias);
+                            $params['join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
                             $params['left_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
                         }
-                        $linkAlias = $parentAlias . "|" . $alias;
+                        $linkAlias = $parentAlias . "|" . $tableAlias;
                         $params['join_table_link_alias'] = $this->db->quoteIdentifier($linkAlias);
                         $join = $module->$name->getJoin($params, true);
-                        $query['join'][$alias] = $join['join'];
-                        if ($rel_module != null) {
-                            $query['join'][$alias] .= $this->build_report_access_query($rel_module, $name);
+                        $query['join'][$tableAlias] = $join['join'];
+                        if ($related_module != null) {
+                            $query['join'][$tableAlias] .= $this->build_report_access_query($related_module, $name);
                         }
-                        $query['id_select'][$alias] = $join['select'] . " AS '" . $alias . "_id'";
-                        $query['id_select_group'][$alias] = $join['select'];
+                        $query['id_select'][$tableAlias] = $join['select'] . " AS '" . $tableAlias . "_id'";
+                        $query['id_select_group'][$tableAlias] = $join['select'];
                     }
                     break;
                 default:
@@ -1351,7 +1351,7 @@ class AOR_Report extends Basic
 
         }
 
-        $dataObject['fieldModule'] = $rel_module;
+        $dataObject['fieldModule'] = $related_module;
         $dataObject['sqlQuery'] = $query;
     }
 
@@ -1975,12 +1975,12 @@ class AOR_Report extends Basic
      */
     private function BuildDataForDateTypeChart(&$dataObject) {
         $field = $dataObject['field'];
-        $data = $dataObject['dataArray'];
+        $dataArray = $dataObject['dataArray'];
         $select_field = $dataObject['selectField'];
         $timedate =$dataObject['timeDate'];
 
-        if ($field->format && in_array($data['type'], array('date', 'datetime', 'datetimecombo'))) {
-            if (in_array($data['type'], array('datetime', 'datetimecombo'))) {
+        if ($field->format && in_array($dataArray['type'], array('date', 'datetime', 'datetimecombo'))) {
+            if (in_array($dataArray['type'], array('datetime', 'datetimecombo'))) {
                 $select_field = $this->db->convert($select_field, 'add_tz_offset');
             }
             $select_field = $this->db->convert($select_field, 'date_format',
@@ -2018,20 +2018,18 @@ class AOR_Report extends Basic
      * @param $table_alias
      * @return mixed
      */
-    private function SetTableAliasChart(
-        $query,
-        $field,
-        $table_alias
-    ) {
-        if ($field->link && isset($query['id_select'][$table_alias])) {
-            $query['select'][] = $query['id_select'][$table_alias];
-            $query['second_group_by'][] = $query['id_select_group'][$table_alias];
-            unset($query['id_select'][$table_alias]);
+    private function SetTableAliasChart(&$dataObject) {
+        $queryArray = $dataObject['queryArray'];
+        $field = $dataObject['field'];
+        $table_alias =$dataObject['tableAlias'];
+        if ($field->link && isset($queryArray['id_select'][$table_alias])) {
+            $queryArray['select'][] = $queryArray['id_select'][$table_alias];
+            $queryArray['second_group_by'][] = $queryArray['id_select_group'][$table_alias];
+            unset($queryArray['id_select'][$table_alias]);
 
-            return $query;
+
         }
-
-        return $query;
+        $dataObject['queryArray'] = $queryArray;
     }
 
     /**
@@ -2066,24 +2064,20 @@ class AOR_Report extends Basic
      * @param $select_field
      * @return array
      */
-    private function SetGroupByChart(
-        $query,
-        $field,
-        $select_field
-    ) {
-        if ($field->group_by == 1) {
-            $query['group_by'][] = $select_field;
+    private function SetGroupByChart(&$dataObject) {
+        $queryArray = $dataObject['queryArray'];
+        $field = $dataObject['field'];
+        $select_field = $dataObject['selectField'];
 
-            return array($query, $select_field);
+        if ($field->group_by == 1) {
+            $queryArray['group_by'][] = $select_field;
         } elseif ($field->field_function != null) {
             $select_field = $field->field_function . '(' . $select_field . ')';
-
-            return array($query, $select_field);
         } else {
-            $query['second_group_by'][] = $select_field;
-
-            return array($query, $select_field);
+            $queryArray['second_group_by'][] = $select_field;
         }
+        $dataObject['queryArray'] = $queryArray;
+        $dataObject['selectField'] = $select_field;
     }
 
     /**
@@ -2227,17 +2221,13 @@ class AOR_Report extends Basic
 
         $this->BuildDataForDateTypeChart($dataObject);
 
+        $this->SetTableAliasChart($dataObject);
+
+        $this->SetGroupByChart($dataObject);
 
         $queryArray = $dataObject['queryArray'];
         $field = $dataObject['field'];
-        $table_alias =$dataObject['tableAlias'];
-
-        $queryArray = $this->SetTableAliasChart($queryArray, $field, $table_alias);
-
-        $field = $dataObject['field'];
         $select_field = $dataObject['selectField'];
-
-        list($queryArray, $select_field) = $this->SetGroupByChart($queryArray, $field, $select_field);
 
         $queryArray = $this->SetSortByChart($queryArray, $field, $select_field);
 
