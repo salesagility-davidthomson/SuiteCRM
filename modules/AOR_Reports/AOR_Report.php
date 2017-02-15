@@ -2166,33 +2166,12 @@ class AOR_Report extends Basic
 
 
 
-    private function createQueryDataArrayChart(
-        &$dataObject
-    ) {
-
-//        $dataObject = array(
-//                'beanList'=>null,
-//                'queryArray'=>null,
-//                'sqlQuery'=>null,
-//                'dataArray'=>null,
-//                'field'=>null,
-//                'module'=>null,
-//                'fieldModule'=>null,
-//                'tableAlias'=>null,
-//                'oldAlias'=>null,
-//                'timeDate'=>null,
-//                'selectField'=>null
-//        );
-
-
-//        list($oldAlias, $table_alias, $queryArray, $field_module) = $this->BuildJoinsForEachExternalRelatedFieldChart($dataObject);
-
+    private function createQueryDataArrayChart(&$dataObject) {
 
         $field = $dataObject['field'];
         $module = $dataObject['module'];
 
         // --- sql query building
-
         $path = unserialize(base64_decode($field->module_path));
         $pathExists = !empty($path[0]);
         $PathIsNotModuleDir = $path[0] != $module->module_dir;
@@ -2202,25 +2181,15 @@ class AOR_Report extends Basic
             }
 
         }
-
-         // --- sql query building
-
-
+        // --- sql query building
         // --- data queryArray building
         $this->BuildDataForRelateTypeChart($dataObject);
-
         $this->BuildDataForLinkTypeChart($dataObject);
-
         $this->BuildDataForCurrencyTypeChart($dataObject);
-
         $this->BuildDataForCustomFieldChart($dataObject);
-
         $this->BuildDataForDateTypeChart($dataObject);
-
         $this->SetTableAliasChart($dataObject);
-
         $this->SetGroupByChart($dataObject);
-
         $this->SetSortByChart($dataObject);
 
         $queryArray = $dataObject['queryArray'];
@@ -2233,7 +2202,6 @@ class AOR_Report extends Basic
 //            $queryArray['where'][] = $select_field . " = '" . $group_value . "' AND ";
 //        }
         $dataObject['queryArray'] = $queryArray;
-        return $dataObject;
     }
 
 
