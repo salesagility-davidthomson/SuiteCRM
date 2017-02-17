@@ -669,16 +669,16 @@ class AOR_ReportsController extends SugarController {
         $reportParams =$model->getReportParameters($this->bean);
         $this->view_object_map['reportParams'] =$reportParams;
 
-        $reportHTML = $this->bean->buildMultiGroupReport(0,true);
-        $this->view_object_map['reportHTML'] =$reportHTML;
+//        $reportHTML = $this->bean->buildMultiGroupReport(0,true);
+//        $this->view_object_map['reportHTML'] =$reportHTML;
 
 
         $chartsHTML = $this->bean->buildReportChart(null, AOR_Report::CHART_TYPE_RGRAPH);
         $this->view_object_map['chartsHTML'] =$chartsHTML;
 
 
-        $chartsPerRow = $this->bean->graphs_per_row;
-        $this->view_object_map['chartsPerRow'] =$chartsPerRow;
+//        $chartsPerRow = $this->bean->graphs_per_row;
+//        $this->view_object_map['chartsPerRow'] =$chartsPerRow;
 
     }
 

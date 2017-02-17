@@ -1069,8 +1069,30 @@ class AOR_Report extends Basic
 
     public function buildReportQueryChart($beanList, $timedate, $app_list_strings, $sugar_config, $extra = array())
     {
+        $dataObject = array(
+            'reportId'=>null,
+            'beanList'=>null,
+            'queryArray'=>null,
+            'sqlQuery'=>null,
+            'dataArray'=>null,
+            'field'=>null,
+            'module'=>null,
+            'fieldModule'=>null,
+            'tableAlias'=>null,
+            'oldAlias'=>null,
+            'timeDate'=>null,
+            'selectField'=>null
+        );
+        $query = '';
+        $reportId = $this->id;
         $model = new Model();
         $moduleName = $this->report_module;
+        $queryDataArray = array();
+
+        $moduleBeanName = $beanList[$moduleName];
+        if($moduleBeanName === null){
+            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
+        }
 
         //Check if the user has access to the target module
         if (!(ACLController::checkAccess($moduleName, 'list', true))) {
@@ -1078,18 +1100,26 @@ class AOR_Report extends Basic
         }
 
 
+        $bean = new $beanList[$moduleName];
+        $queryDataArray = $this->DataArrayGetTableData($queryDataArray, $bean);
 
-        $query = '';
 
-        $reportId = $this->id;
-        $query_array = $this->buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, $model);
+        $dataObject['reportId']=$reportId;
+        $dataObject['module'] = $bean;
+        $dataObject['queryArray'] = $queryDataArray;
+        $dataObject['beanList'] = $beanList;
+        $dataObject['timeDate']= $timedate;
+
+//        $query_array = $this->buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, $model);
+        $this->buildQueryArraySelectForChart($dataObject, $model);
 
         try {
-            $query_array = $this->buildQueryArrayWhereForChart($beanList, $moduleName, $app_list_strings, $sugar_config,$query_array, $extra);
+            $this->buildQueryArrayWhereForChart($dataObject, $app_list_strings, $sugar_config, $extra);
         } catch (Exception $e) {
             throw new Exception('Caught exception:' . $e->getMessage(), $e->getCode());
         }
 
+        $query_array = $dataObject['queryArray'];
         $query = $this->buildSqlQuerySelect($query_array, $query);
 
         $query = $this->buildSqlQueryGroupBy($query_array, $query);
@@ -1109,51 +1139,29 @@ class AOR_Report extends Basic
     }
 
 
-    /**
-     * @param $beanList
-     * @param $moduleName
-     * @param $timedate
-     * @param $reportId
-     * @param string $group_value
-     * @return array
-     * @throws Exception
-     * @internal param array $query
-     */
-    public function buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, Model $model)
+
+//    public function buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, Model $model)
+    public function buildQueryArraySelectForChart(&$dataObject, Model $model)
     {
-        $queryDataArray = array();
-        $module = $beanList[$moduleName];
+//        $queryDataArray = array();
+//        $module = $beanList[$moduleName];
+//
+//        if($module === null){
+//            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
+//        }
 
-        if($module === null){
-            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
-        }
+//        $dataObject['module'] = $bean;
+//        $dataObject['queryArray'] = $queryDataArray;
+//        $dataObject['beanList'] = $beanList;
+//        $dataObject['timeDate']= $timedate;
+
+
+        $bean = $dataObject['module'];
+        $reportId = $dataObject['reportId'];
+
         try {
-            $bean = new $beanList[$moduleName];
-
-            $queryDataArray = $this->DataArrayGetTableData($queryDataArray, $bean);
 
             $rowArray = $model->getChartDataArrayForSelect($reportId,$bean);
-
-
-            $dataObject = array(
-                'beanList'=>null,
-                'queryArray'=>null,
-                'sqlQuery'=>null,
-                'dataArray'=>null,
-                'field'=>null,
-                'module'=>null,
-                'fieldModule'=>null,
-                'tableAlias'=>null,
-                'oldAlias'=>null,
-                'timeDate'=>null,
-                'selectField'=>null
-            );
-
-            $dataObject['queryArray'] = $queryDataArray;
-            $dataObject['module'] = new $beanList[$moduleName];
-            $dataObject['beanList'] = $beanList;
-            $dataObject['timeDate']= $timedate;
-
             $i = 0;
             foreach($rowArray as $row){
                 //getField($id)
@@ -1169,10 +1177,6 @@ class AOR_Report extends Basic
                 $this->createQueryDataArrayChart($dataObject);
                 ++$i;
             }
-
-            $queryArray = $dataObject['queryArray'];
-
-            return $queryArray;
 
         } catch (Exception $e) {
             throw new Exception('Exception Caught :'.$e->getMessage(),$e->getCode());
@@ -1593,8 +1597,12 @@ class AOR_Report extends Basic
 
 
 
-    public function buildQueryArrayWhereForChart($beanList, $moduleName, $app_list_strings, $sugar_config, $query = array(), $extra = array())
+//    public function buildQueryArrayWhereForChart($beanList, $moduleName, $queryDataArray, $app_list_strings, $sugar_config, $queryArray = array(), $extra = array())
+    public function buildQueryArrayWhereForChart(&$dataObject, $app_list_strings, $sugar_config,  $extra = array())
     {
+        $beanList = $dataObject['beanList'];
+        $bean = $dataObject['module'];
+        $queryArray = $dataObject['queryArray'];
 
         $aor_sql_operator_list = $this->getAllowedOperatorList();
         $tiltLogicOp = true;
@@ -1604,22 +1612,20 @@ class AOR_Report extends Basic
         }
 
         $closure = false;
-        if (!empty($query['where'])) {
-            $query['where'][] = '(';
+        if (!empty($queryArray['where'])) {
+            $queryArray['where'][] = '(';
             $closure = true;
         }
-
-        $moduleBeanName = $beanList[$moduleName];
-
-        if($moduleBeanName === null){
-            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
-        }
-        $bean = new $beanList[$moduleName];
-
-        $rowArray = $this->getChartDataArray2($this->id);
+//
+//        $moduleBeanName = $beanList[$moduleName];
+//
+//        if($moduleBeanName === null){
+//            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
+//        }
+        $rowArray = $this->getChartDataArray2($dataObject['reportId']);
 
         //checkIfUserIsAllowAccessToModule
-        if (!$this->checkIfUserIsAllowedAccessToRelatedModules($rowArray, $bean, $beanList)) {
+        if (!$this->checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)) {
             throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$bean, 102);
         }
 
@@ -1646,8 +1652,8 @@ class AOR_Report extends Basic
                     $new_condition_module = new $beanList[getRelatedModule($condition_module->module_dir, $rel)];
                     $oldAlias = $table_alias;
                     $table_alias = $table_alias . ":" . $rel;
-                    $query = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
-                        'relationship', $query, $new_condition_module);
+                    $queryArray = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
+                        'relationship', $queryArray, $new_condition_module);
                     $condition_module = $new_condition_module;
                 }
             }
@@ -1662,7 +1668,7 @@ class AOR_Report extends Basic
                         list($data, $condition) = $this->primeDataForRelate($data, $condition, $condition_module);
                         break;
                     case 'link':
-                        list($table_alias, $query, $condition_module) = $this->primeDataForLink($query,
+                        list($table_alias, $queryArray, $condition_module) = $this->primeDataForLink($queryArray,
                             $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition, $table_alias);
                         break;
                 }
@@ -1681,7 +1687,7 @@ class AOR_Report extends Basic
 //                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
 
                 //buildJoinQueryForCustomFields
-                $query = $this->buildJoinQueryForCustomFields($isCustomField, $query, $table_alias, $tableName,
+                $queryArray = $this->buildJoinQueryForCustomFields($isCustomField, $queryArray, $table_alias, $tableName,
                     $condition_module);
 
                 //check for custom selectable parameter from report
@@ -1691,12 +1697,12 @@ class AOR_Report extends Basic
                 //what type of condition is it?
                 list(
                     $condition,
-                    $query,
+                    $queryArray,
                     $value,
                     $field,
                     $where_set
                     ) = $this->buildQueryForConditionTypeChart(
-                            $query,
+                            $queryArray,
                             $conditionType,
                             $condition_module,
                             $condition,
@@ -1720,17 +1726,17 @@ class AOR_Report extends Basic
                     $value = "{$value} OR {$field} IS NULL";
                 }
 
-                $query = $this->whereNotSet($query, $where_set, $condition,
+                $queryArray = $this->whereNotSet($queryArray, $where_set, $condition,
                     $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $field, $value);
 
                 $tiltLogicOp = false;
             } else {
                 if ($condition->parenthesis) {
                     if ($condition->parenthesis == 'START') {
-                        $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
+                        $queryArray['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
                         $tiltLogicOp = true;
                     } else {
-                        $query['where'][] = ')';
+                        $queryArray['where'][] = ')';
                         $tiltLogicOp = false;
                     }
                 } else {
@@ -1740,20 +1746,20 @@ class AOR_Report extends Basic
 
         }
 
-        if (isset($query['where']) && $query['where']) {
-            array_unshift($query['where'], '(');
-            $query['where'][] = ') AND ';
+        if (isset($queryArray['where']) && $queryArray['where']) {
+            array_unshift($queryArray['where'], '(');
+            $queryArray['where'][] = ') AND ';
         }
-        $query['where'][] = $bean->table_name . ".deleted = 0 " . $this->build_report_access_query($bean,
+        $queryArray['where'][] = $bean->table_name . ".deleted = 0 " . $this->build_report_access_query($bean,
                 $bean->table_name);
 
 
 
         if ($closure) {
-            $query['where'][] = ')';
+            $queryArray['where'][] = ')';
         }
 
-        return $query;
+        return $queryArray;
     }
 
 
@@ -2979,12 +2985,7 @@ class AOR_Report extends Basic
         return $query;
     }
 
-    /**
-     * @param $rowArray
-     * @param $bean
-     * @param $beanList
-     * @return array
-     */
+
     private function checkIfUserIsAllowedAccessToRelatedModules($rowArray, $bean, $beanList)
     {
         $isAllowed = true;
@@ -3015,6 +3016,41 @@ class AOR_Report extends Basic
 
         return $isAllowed;
     }
+
+
+    private function checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)
+    {
+        $bean = $dataObject['bean'];
+        $beanList = $dataObject['beanList'];
+        $isAllowed = true;
+        foreach ($rowArray as $row) {
+            $condition = new AOR_Condition();
+            $condition->retrieve($row['id']);
+
+            //path is stored as base64 encoded serialized php object
+            $path = unserialize(base64_decode($condition->module_path));
+
+            $condition_module = $bean;
+            $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $bean->module_dir;
+            if ($isRelationshipExternalModule) {
+                //loop over each relationship field and check if allowed access
+                foreach ($path as $rel) {
+                    if (!empty($rel)) {
+                        // Bug: Prevents relationships from loading.
+                        $new_condition_module = new $beanList[getRelatedModule($condition_module->module_dir, $rel)];
+                        //Check if the user has access to the related module
+                        if (!(ACLController::checkAccess($new_condition_module->module_name, 'list', true))) {
+                            $isAllowed = false;
+                        }
+                    }
+                }
+            }
+
+        }
+
+        return $isAllowed;
+    }
+
 
     /**
      * @param $query_array
