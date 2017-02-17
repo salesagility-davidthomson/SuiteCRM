@@ -1085,7 +1085,7 @@ class AOR_Report extends Basic
         $query_array = $this->buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, $model);
 
         try {
-            $query_array = $this->buildQueryArrayWhere($query_array, $extra);
+            $query_array = $this->buildQueryArrayWhereForChart($query_array, $extra);
         } catch (Exception $e) {
             throw new Exception('Caught exception:' . $e->getMessage(), $e->getCode());
         }
@@ -1554,6 +1554,182 @@ class AOR_Report extends Basic
                     }
 
                     list($value, $query) = $this->whereNotSet($query, $where_set, $condition,
+                        $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $field, $value);
+
+                    $tiltLogicOp = false;
+                } else {
+                    if ($condition->parenthesis) {
+                        if ($condition->parenthesis == 'START') {
+                            $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
+                            $tiltLogicOp = true;
+                        } else {
+                            $query['where'][] = ')';
+                            $tiltLogicOp = false;
+                        }
+                    } else {
+                        $GLOBALS['log']->debug('illegal condition');
+                    }
+                }
+
+            }
+
+            if (isset($query['where']) && $query['where']) {
+                array_unshift($query['where'], '(');
+                $query['where'][] = ') AND ';
+            }
+            $query['where'][] = $module->table_name . ".deleted = 0 " . $this->build_report_access_query($module,
+                    $module->table_name);
+
+        }
+
+        if ($closure) {
+            $query['where'][] = ')';
+        }
+
+        return $query;
+    }
+
+
+
+
+    /**
+     * @param array $query
+     * @param array $extra
+     * @return array|mixed|string
+     * @throws Exception
+     */
+    public function buildQueryArrayWhereForChart($query = array(), $extra = array())
+    {
+        global $beanList, $app_list_strings, $sugar_config;
+        $aor_sql_operator_list = $this->getAllowedOperatorList();
+
+        if (isset($extra['where']) && $extra['where']) {
+            $query_array['where'][] = implode(' AND ', $extra['where']) . ' AND ';
+        }
+
+        $closure = false;
+        if (!empty($query['where'])) {
+            $query['where'][] = '(';
+            $closure = true;
+        }
+
+        if ($beanList[$this->report_module]) {
+            $module = new $beanList[$this->report_module]();
+
+            $sql = "SELECT id FROM aor_conditions WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY condition_order ASC";
+            $result = $this->db->query($sql);
+//            $resultCopy = $this->db->query($sql);;
+            $tiltLogicOp = true;
+
+            $rowArray = array();
+            while ($row = $this->db->fetchByAssoc($result)) {
+                array_push($rowArray, $row);
+            }
+
+            //checkIfUserIsAllowAccessToModule
+            if (!$this->checkIfUserIsAllowedAccessToRelatedModules($rowArray, $module, $beanList)) {
+                throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$module, 102);
+            }
+
+
+            //build where statement
+            foreach ($rowArray as $row) {
+                $condition = new AOR_Condition();
+                $condition->retrieve($row['id']);
+
+                //path is stored as base64 encoded serialized php object
+                $path = unserialize(base64_decode($condition->module_path));
+
+                $condition_module = $module;
+                $table_alias = $condition_module->table_name;
+                $oldAlias = $table_alias;
+                $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $module->module_dir;
+                //check if relationship to field outside this module is set for condition
+                if ($isRelationshipExternalModule) {
+                    //loop over each relationship field and check if allowed access
+                    foreach ($path as $rel) {
+                        if (empty($rel)) {
+                            continue;
+                        }
+                        // Bug: Prevents relationships from loading.
+                        $new_condition_module = new $beanList[getRelatedModule($condition_module->module_dir, $rel)];
+                        $oldAlias = $table_alias;
+                        $table_alias = $table_alias . ":" . $rel;
+                        $query = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
+                            'relationship', $query, $new_condition_module);
+                        $condition_module = $new_condition_module;
+                    }
+                }
+
+                //check if condition is in the allowed operator list
+                if (isset($aor_sql_operator_list[$condition->operator])) {
+                    $where_set = false;
+                    $data = $condition_module->field_defs[$condition->field];
+                    //check data type of field and process
+                    switch ($data['type']) {
+                        case 'relate':
+                            list($data, $condition) = $this->primeDataForRelate($data, $condition, $condition_module);
+                            break;
+                        case 'link':
+                            list($table_alias, $query, $condition_module) = $this->primeDataForLink($query,
+                                $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition, $table_alias);
+                            break;
+                    }
+
+
+                    $tableName = $table_alias;
+                    $fieldName = $condition->field;
+                    $dataSourceIsSet = isset($data['source']);
+                    if ($dataSourceIsSet) {
+                        $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
+                    }
+                    //setValueSuffix
+                    $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias, $fieldName);
+
+                    //check if its a custom field the set the field parameter
+//                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
+
+                    //buildJoinQueryForCustomFields
+                    $query = $this->buildJoinQueryForCustomFields($isCustomField, $query, $table_alias, $tableName,
+                        $condition_module);
+
+                    //check for custom selectable parameter from report
+                    $this->buildConditionParams($condition);
+
+                    $conditionType = $condition->value_type;
+                    //what type of condition is it?
+                    list(
+                        $condition,
+                        $query,
+                        $value,
+                        $field,
+                        $where_set
+                        ) = $this->buildQueryForConditionTypeChart(
+                                $query,
+                                $conditionType,
+                                $condition_module,
+                                $condition,
+                                $beanList,
+                                $oldAlias,
+                                $path,
+                                $rel,
+                                $table_alias,
+                                $sugar_config,
+                                $field,
+                                $app_list_strings,
+                                $aor_sql_operator_list,
+                                $tiltLogicOp
+                    );
+
+                    //handle like conditions
+                    $conditionOperator = $condition->operator;
+                    $value = $this->handleLikeConditions($conditionOperator, $value);
+
+                    if ($condition->value_type == 'Value' && !$condition->value && $condition->operator == 'Equal_To') {
+                        $value = "{$value} OR {$field} IS NULL";
+                    }
+
+                    $query = $this->whereNotSet($query, $where_set, $condition,
                         $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $field, $value);
 
                     $tiltLogicOp = false;
@@ -2584,6 +2760,152 @@ class AOR_Report extends Basic
         );
     }
 
+
+
+    /**
+     * @param $query
+     * @param $conditionType
+     * @param $condition_module
+     * @param $condition
+     * @param $beanList
+     * @param $oldAlias
+     * @param $path
+     * @param $rel
+     * @param $table_alias
+     * @param $sugar_config
+     * @param $field
+     * @param $app_list_strings
+     * @param $aor_sql_operator_list
+     * @param $tiltLogicOp
+     * @param $current_user
+     * @return array
+     */
+    private function buildQueryForConditionTypeChart(
+        $query,
+        $conditionType,
+        $condition_module,
+        $condition,
+        $beanList,
+        $oldAlias,
+        $path,
+        $rel,
+        $table_alias,
+        $sugar_config,
+        $field,
+        $app_list_strings,
+        $aor_sql_operator_list,
+        $tiltLogicOp
+    ) {
+        switch ($conditionType) {
+            case 'Field': // is it a specific field
+                //processWhereConditionForTypeField
+                $data = $condition_module->field_defs[$condition->value];
+
+                switch ($data['type']) {
+                    case 'relate':
+                        list($data, $condition) = $this->primeDataForRelate($data, $condition,
+                            $condition_module);
+                        break;
+                    case 'link':
+                        list($table_alias, $query, $condition_module) = $this->primeDataForLink($query,
+                            $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition,
+                            $table_alias);
+                        break;
+                }
+
+
+                $tableName = $condition_module->table_name;
+                $fieldName = $condition->value;
+                $dataSourceIsSet = isset($data['source']);
+                if ($dataSourceIsSet) {
+                    $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
+                }
+
+                //setValueSuffix
+                $value = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias, $fieldName);
+                $query = $this->buildJoinQueryForCustomFields($isCustomField, $query, $table_alias,
+                    $tableName,
+                    $condition_module);
+                break;
+
+            case 'Date': //is it a date
+                //processWhereConditionForTypeDate
+                $params = unserialize(base64_decode($condition->value));
+
+                // Fix for issue #1272 - AOR_Report module cannot update Date type parameter.
+                if ($params == false) {
+                    $params = $condition->value;
+                }
+
+                $firstParam = $params[0];
+                list($value, $field, $query) = $this->processForDateFrom(
+                    $firstParam,
+                    $sugar_config,
+                    $field,
+                    $query,
+                    $condition_module);
+
+                $secondParam = $params[1];
+                $thirdParam = $params[2];
+                $fourthParam = $params[3];
+                $value = $this->processForDateOther($secondParam, $fourthParam, $sugar_config,
+                    $app_list_strings, $thirdParam, $value);
+
+                break;
+
+            case 'Multi': //are there multiple conditions setup
+                //processWhereConditionForTypeMulti
+                $sep = ' AND ';
+                if ($condition->operator == 'Equal_To') {
+                    $sep = ' OR ';
+                }
+                $multi_values = unencodeMultienum($condition->value);
+                if (!empty($multi_values)) {
+                    $value = '(';
+                    foreach ($multi_values as $multi_value) {
+                        if ($value != '(') {
+                            $value .= $sep;
+                        }
+                        $value .= $field . ' ' . $aor_sql_operator_list[$condition->operator] . " '" . $multi_value . "'";
+                    }
+                    $value .= ')';
+                }
+                $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . $value;
+                $where_set = true;
+                break;
+            case "Period": //is it a period of time
+                //processWhereConditionForTypePeriod
+                if (array_key_exists($condition->value, $app_list_strings['date_time_period_list'])) {
+                    $params = $condition->value;
+                } else {
+                    $params = base64_decode($condition->value);
+                }
+                $value = '"' . getPeriodDate($params)->format('Y-m-d H:i:s') . '"';
+                break;
+            case "CurrentUserID": //not sure what this is for
+                //processWhereConditionForTypeCurrentUser
+                global $current_user;
+                $value = '"' . $current_user->id . '"';
+                break;
+            case 'Value': //is it a specific value
+                //processWhereConditionForTypeValue
+                $value = "'" . $this->db->quote($condition->value) . "'";
+                break;
+            default:
+                $value = "'" . $this->db->quote($condition->value) . "'";
+                break;
+        }
+
+        return array(
+            $condition,
+            $query,
+            $value,
+            $field,
+            $where_set
+        );
+    }
+
+
     /**
      * @param $conditionOperator
      * @param $value
@@ -2659,11 +2981,11 @@ class AOR_Report extends Basic
             } else {
                 $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . $field . ' ' . $aor_sql_operator_list[$condition->operator] . ' ' . $value;
 
-                return array($value, $query);
+                return  $query;
             }
         }
 
-        return array($value, $query);
+        return $query;
     }
 
     /**
