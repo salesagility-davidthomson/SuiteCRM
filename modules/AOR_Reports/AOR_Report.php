@@ -1151,9 +1151,7 @@ class AOR_Report extends Basic
                 $field->retrieve($row['id']);
                 $field->label = str_replace(' ', '_', $field->label) . $i;
                 $dataObject['field'] = $field;
-
-                $field_module = $dataObject['module'];
-                $dataObject['tableAlias'] = $field_module->table_name;
+                $dataObject['tableAlias'] = $dataObject['module']->table_name;
                 $dataObject['oldAlias'] = $dataObject['tableAlias'];
 
                 $this->createQueryDataArrayChart($dataObject);
@@ -1255,7 +1253,10 @@ class AOR_Report extends Basic
 
     public function buildReportQueryJoinChart(&$dataObject, $relationship, $type = 'relationship') {
 
-        $module = $dataObject['fieldModule'];
+
+        $moduleBeanName = $dataObject['beanlist'][$relationship];
+        $dataObject['fieldModule']= new $dataObject['beanlist'][$beanName];
+//        $module = $dataObject['module'];
         $name = $relationship;
         $beanList = $dataObject['beanList'];
         $field_module = $dataObject['fieldModule'];
@@ -2272,14 +2273,10 @@ class AOR_Report extends Basic
 
 
     private function createQueryDataArrayChart(&$dataObject) {
-
-        $field = $dataObject['field'];
-        $module = $dataObject['module'];
-
         // --- sql query building
-        $path = unserialize(base64_decode($field->module_path));
+        $path = unserialize(base64_decode($dataObject['field']->module_path));
         $pathExists = !empty($path[0]);
-        $PathIsNotModuleDir = $path[0] != $module->module_dir;
+        $PathIsNotModuleDir = $path[0] != $dataObject['module']->module_dir;
         if ($pathExists && $PathIsNotModuleDir) {
             foreach ($path as $relationship) {
                 $this->buildReportQueryJoinChart($dataObject,$relationship,'relationship');
@@ -2299,8 +2296,7 @@ class AOR_Report extends Basic
 
         $queryArray = $dataObject['queryArray'];
         $select_field = $dataObject['selectField'];
-        $field = $dataObject['field'];
-        $queryArray['select'][] = $select_field . " AS '" . $field->label . "'";
+        $queryArray['select'][] = $select_field . " AS '" . $dataObject['field']->label . "'";
 
         //disabled as not being set for chart creation will look into this for duplicate code createQueryDataArray
 //        if ($field->group_display == 1 && $group_value) {
