@@ -1601,8 +1601,7 @@ class AOR_Report extends Basic
     public function buildQueryArrayWhereForChart(&$dataObject, $app_list_strings, $sugar_config,  $extra = array())
     {
         $beanList = $dataObject['beanList'];
-        $bean = $dataObject['module'];
-        $queryArray = $dataObject['queryArray'];
+        $bean = $dataObject['module'];       
 
         $aor_sql_operator_list = $this->getAllowedOperatorList();
         $tiltLogicOp = true;
@@ -1612,8 +1611,8 @@ class AOR_Report extends Basic
         }
 
         $closure = false;
-        if (!empty($queryArray['where'])) {
-            $queryArray['where'][] = '(';
+        if (!empty($dataObject['queryArray']['where'])) {
+            $dataObject['queryArray']['where'][] = '(';
             $closure = true;
         }
 //
@@ -1626,7 +1625,7 @@ class AOR_Report extends Basic
 
         //checkIfUserIsAllowAccessToModule
         if (!$this->checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)) {
-            throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$bean, 102);
+            throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$dataObject['module'], 102);
         }
 
         //build where statement
@@ -1637,10 +1636,10 @@ class AOR_Report extends Basic
             //path is stored as base64 encoded serialized php object
             $path = unserialize(base64_decode($condition->module_path));
 
-            $condition_module = $bean;
+            $condition_module = $dataObject['module'];
             $table_alias = $condition_module->table_name;
             $oldAlias = $table_alias;
-            $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $bean->module_dir;
+            $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $dataObject['module']->module_dir;
             //check if relationship to field outside this module is set for condition
             if ($isRelationshipExternalModule) {
                 //loop over each relationship field and check if allowed access
@@ -1652,8 +1651,8 @@ class AOR_Report extends Basic
                     $new_condition_module = new $beanList[getRelatedModule($condition_module->module_dir, $rel)];
                     $oldAlias = $table_alias;
                     $table_alias = $table_alias . ":" . $rel;
-                    $queryArray = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
-                        'relationship', $queryArray, $new_condition_module);
+                    $dataObject['queryArray'] = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
+                        'relationship', $dataObject['queryArray'], $new_condition_module);
                     $condition_module = $new_condition_module;
                 }
             }
@@ -1668,7 +1667,7 @@ class AOR_Report extends Basic
                         list($data, $condition) = $this->primeDataForRelate($data, $condition, $condition_module);
                         break;
                     case 'link':
-                        list($table_alias, $queryArray, $condition_module) = $this->primeDataForLink($queryArray,
+                        list($table_alias, $dataObject['queryArray'], $condition_module) = $this->primeDataForLink($dataObject['queryArray'],
                             $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition, $table_alias);
                         break;
                 }
@@ -1687,7 +1686,7 @@ class AOR_Report extends Basic
 //                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
 
                 //buildJoinQueryForCustomFields
-                $queryArray = $this->buildJoinQueryForCustomFields($isCustomField, $queryArray, $table_alias, $tableName,
+                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $table_alias, $tableName,
                     $condition_module);
 
                 //check for custom selectable parameter from report
@@ -1697,12 +1696,12 @@ class AOR_Report extends Basic
                 //what type of condition is it?
                 list(
                     $condition,
-                    $queryArray,
+                    $dataObject['queryArray'],
                     $value,
                     $field,
                     $where_set
                     ) = $this->buildQueryForConditionTypeChart(
-                            $queryArray,
+                    $dataObject['queryArray'],
                             $conditionType,
                             $condition_module,
                             $condition,
@@ -1726,17 +1725,17 @@ class AOR_Report extends Basic
                     $value = "{$value} OR {$field} IS NULL";
                 }
 
-                $queryArray = $this->whereNotSet($queryArray, $where_set, $condition,
+                $dataObject['queryArray'] = $this->whereNotSet($dataObject['queryArray'], $where_set, $condition,
                     $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $field, $value);
 
                 $tiltLogicOp = false;
             } else {
                 if ($condition->parenthesis) {
                     if ($condition->parenthesis == 'START') {
-                        $queryArray['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
+                        $dataObject['queryArray']['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
                         $tiltLogicOp = true;
                     } else {
-                        $queryArray['where'][] = ')';
+                        $dataObject['queryArray']['where'][] = ')';
                         $tiltLogicOp = false;
                     }
                 } else {
@@ -1750,8 +1749,8 @@ class AOR_Report extends Basic
             array_unshift($queryArray['where'], '(');
             $queryArray['where'][] = ') AND ';
         }
-        $queryArray['where'][] = $bean->table_name . ".deleted = 0 " . $this->build_report_access_query($bean,
-                $bean->table_name);
+        $queryArray['where'][] = $dataObject['module']->table_name . ".deleted = 0 " . $this->build_report_access_query($dataObject['module'],
+                $dataObject['module']->table_name);
 
 
 
