@@ -57,7 +57,7 @@ class ModelAORReports
         return $ChartObj;
     }
 
-    public function getChartDataArray($reportId, $bean)
+    public function getChartDataArrayForSelect($reportId, $bean)
     {
         $ChartObj = $this->getChartObject($reportId, $bean);
 

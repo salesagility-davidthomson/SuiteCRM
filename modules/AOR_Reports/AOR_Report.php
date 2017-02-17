@@ -1045,9 +1045,10 @@ class AOR_Report extends Basic
         $mainGroupField = $this->getMainGroupSet($ResultRowArray);
 
 
-        global $beanList, $timedate;
+        global $beanList, $timedate, $app_list_strings, $sugar_config;
+
         try {
-            $query = $this->buildReportQueryChart($beanList, $timedate);//this is where it needs to branch one report for normal queries and one for charts
+            $query = $this->buildReportQueryChart($beanList, $timedate, $app_list_strings, $sugar_config);//this is where it needs to branch one report for normal queries and one for charts
         } catch (Exception $e) {
             echo 'Caught exception: ', $e->getMessage(), "\n";
         }
@@ -1066,10 +1067,9 @@ class AOR_Report extends Basic
 
 
 
-    public function buildReportQueryChart($beanList, $timedate, $extra = array())
+    public function buildReportQueryChart($beanList, $timedate, $app_list_strings, $sugar_config, $extra = array())
     {
         $model = new Model();
-
         $moduleName = $this->report_module;
 
         //Check if the user has access to the target module
@@ -1085,7 +1085,7 @@ class AOR_Report extends Basic
         $query_array = $this->buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, $model);
 
         try {
-            $query_array = $this->buildQueryArrayWhereForChart($query_array, $extra);
+            $query_array = $this->buildQueryArrayWhereForChart($beanList, $moduleName, $app_list_strings, $sugar_config,$query_array, $extra);
         } catch (Exception $e) {
             throw new Exception('Caught exception:' . $e->getMessage(), $e->getCode());
         }
@@ -1132,7 +1132,7 @@ class AOR_Report extends Basic
 
             $queryDataArray = $this->DataArrayGetTableData($queryDataArray, $bean);
 
-            $rowArray = $model->getChartDataArray($reportId,$bean);
+            $rowArray = $model->getChartDataArrayForSelect($reportId,$bean);
 
 
             $dataObject = array(
@@ -1592,16 +1592,12 @@ class AOR_Report extends Basic
 
 
 
-    /**
-     * @param array $query
-     * @param array $extra
-     * @return array|mixed|string
-     * @throws Exception
-     */
-    public function buildQueryArrayWhereForChart($query = array(), $extra = array())
+
+    public function buildQueryArrayWhereForChart($beanList, $moduleName, $app_list_strings, $sugar_config, $query = array(), $extra = array())
     {
-        global $beanList, $app_list_strings, $sugar_config;
+
         $aor_sql_operator_list = $this->getAllowedOperatorList();
+        $tiltLogicOp = true;
 
         if (isset($extra['where']) && $extra['where']) {
             $query_array['where'][] = implode(' AND ', $extra['where']) . ' AND ';
@@ -1613,150 +1609,145 @@ class AOR_Report extends Basic
             $closure = true;
         }
 
-        if ($beanList[$this->report_module]) {
-            $module = new $beanList[$this->report_module]();
+        $moduleBeanName = $beanList[$moduleName];
 
-            $sql = "SELECT id FROM aor_conditions WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY condition_order ASC";
-            $result = $this->db->query($sql);
-//            $resultCopy = $this->db->query($sql);;
-            $tiltLogicOp = true;
+        if($moduleBeanName === null){
+            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
+        }
+        $bean = new $beanList[$moduleName];
 
-            $rowArray = array();
-            while ($row = $this->db->fetchByAssoc($result)) {
-                array_push($rowArray, $row);
-            }
+        $rowArray = $this->getChartDataArray2($this->id);
 
-            //checkIfUserIsAllowAccessToModule
-            if (!$this->checkIfUserIsAllowedAccessToRelatedModules($rowArray, $module, $beanList)) {
-                throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$module, 102);
-            }
+        //checkIfUserIsAllowAccessToModule
+        if (!$this->checkIfUserIsAllowedAccessToRelatedModules($rowArray, $bean, $beanList)) {
+            throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$bean, 102);
+        }
 
+        //build where statement
+        foreach ($rowArray as $row) {
+            $condition = new AOR_Condition();
+            $condition->retrieve($row['id']);
 
-            //build where statement
-            foreach ($rowArray as $row) {
-                $condition = new AOR_Condition();
-                $condition->retrieve($row['id']);
+            //path is stored as base64 encoded serialized php object
+            $path = unserialize(base64_decode($condition->module_path));
 
-                //path is stored as base64 encoded serialized php object
-                $path = unserialize(base64_decode($condition->module_path));
-
-                $condition_module = $module;
-                $table_alias = $condition_module->table_name;
-                $oldAlias = $table_alias;
-                $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $module->module_dir;
-                //check if relationship to field outside this module is set for condition
-                if ($isRelationshipExternalModule) {
-                    //loop over each relationship field and check if allowed access
-                    foreach ($path as $rel) {
-                        if (empty($rel)) {
-                            continue;
-                        }
-                        // Bug: Prevents relationships from loading.
-                        $new_condition_module = new $beanList[getRelatedModule($condition_module->module_dir, $rel)];
-                        $oldAlias = $table_alias;
-                        $table_alias = $table_alias . ":" . $rel;
-                        $query = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
-                            'relationship', $query, $new_condition_module);
-                        $condition_module = $new_condition_module;
+            $condition_module = $bean;
+            $table_alias = $condition_module->table_name;
+            $oldAlias = $table_alias;
+            $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $bean->module_dir;
+            //check if relationship to field outside this module is set for condition
+            if ($isRelationshipExternalModule) {
+                //loop over each relationship field and check if allowed access
+                foreach ($path as $rel) {
+                    if (empty($rel)) {
+                        continue;
                     }
+                    // Bug: Prevents relationships from loading.
+                    $new_condition_module = new $beanList[getRelatedModule($condition_module->module_dir, $rel)];
+                    $oldAlias = $table_alias;
+                    $table_alias = $table_alias . ":" . $rel;
+                    $query = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
+                        'relationship', $query, $new_condition_module);
+                    $condition_module = $new_condition_module;
+                }
+            }
+
+            //check if condition is in the allowed operator list
+            if (isset($aor_sql_operator_list[$condition->operator])) {
+                $where_set = false;
+                $data = $condition_module->field_defs[$condition->field];
+                //check data type of field and process
+                switch ($data['type']) {
+                    case 'relate':
+                        list($data, $condition) = $this->primeDataForRelate($data, $condition, $condition_module);
+                        break;
+                    case 'link':
+                        list($table_alias, $query, $condition_module) = $this->primeDataForLink($query,
+                            $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition, $table_alias);
+                        break;
                 }
 
-                //check if condition is in the allowed operator list
-                if (isset($aor_sql_operator_list[$condition->operator])) {
-                    $where_set = false;
-                    $data = $condition_module->field_defs[$condition->field];
-                    //check data type of field and process
-                    switch ($data['type']) {
-                        case 'relate':
-                            list($data, $condition) = $this->primeDataForRelate($data, $condition, $condition_module);
-                            break;
-                        case 'link':
-                            list($table_alias, $query, $condition_module) = $this->primeDataForLink($query,
-                                $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition, $table_alias);
-                            break;
-                    }
 
+                $tableName = $table_alias;
+                $fieldName = $condition->field;
+                $dataSourceIsSet = isset($data['source']);
+                if ($dataSourceIsSet) {
+                    $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
+                }
+                //setValueSuffix
+                $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias, $fieldName);
 
-                    $tableName = $table_alias;
-                    $fieldName = $condition->field;
-                    $dataSourceIsSet = isset($data['source']);
-                    if ($dataSourceIsSet) {
-                        $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
-                    }
-                    //setValueSuffix
-                    $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias, $fieldName);
-
-                    //check if its a custom field the set the field parameter
+                //check if its a custom field the set the field parameter
 //                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
 
-                    //buildJoinQueryForCustomFields
-                    $query = $this->buildJoinQueryForCustomFields($isCustomField, $query, $table_alias, $tableName,
-                        $condition_module);
+                //buildJoinQueryForCustomFields
+                $query = $this->buildJoinQueryForCustomFields($isCustomField, $query, $table_alias, $tableName,
+                    $condition_module);
 
-                    //check for custom selectable parameter from report
-                    $this->buildConditionParams($condition);
+                //check for custom selectable parameter from report
+                $this->buildConditionParams($condition);
 
-                    $conditionType = $condition->value_type;
-                    //what type of condition is it?
-                    list(
-                        $condition,
-                        $query,
-                        $value,
-                        $field,
-                        $where_set
-                        ) = $this->buildQueryForConditionTypeChart(
-                                $query,
-                                $conditionType,
-                                $condition_module,
-                                $condition,
-                                $beanList,
-                                $oldAlias,
-                                $path,
-                                $rel,
-                                $table_alias,
-                                $sugar_config,
-                                $field,
-                                $app_list_strings,
-                                $aor_sql_operator_list,
-                                $tiltLogicOp
-                    );
+                $conditionType = $condition->value_type;
+                //what type of condition is it?
+                list(
+                    $condition,
+                    $query,
+                    $value,
+                    $field,
+                    $where_set
+                    ) = $this->buildQueryForConditionTypeChart(
+                            $query,
+                            $conditionType,
+                            $condition_module,
+                            $condition,
+                            $beanList,
+                            $oldAlias,
+                            $path,
+                            $rel,
+                            $table_alias,
+                            $sugar_config,
+                            $field,
+                            $app_list_strings,
+                            $aor_sql_operator_list,
+                            $tiltLogicOp
+                );
 
-                    //handle like conditions
-                    $conditionOperator = $condition->operator;
-                    $value = $this->handleLikeConditions($conditionOperator, $value);
+                //handle like conditions
+                $conditionOperator = $condition->operator;
+                $value = $this->handleLikeConditions($conditionOperator, $value);
 
-                    if ($condition->value_type == 'Value' && !$condition->value && $condition->operator == 'Equal_To') {
-                        $value = "{$value} OR {$field} IS NULL";
-                    }
-
-                    $query = $this->whereNotSet($query, $where_set, $condition,
-                        $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $field, $value);
-
-                    $tiltLogicOp = false;
-                } else {
-                    if ($condition->parenthesis) {
-                        if ($condition->parenthesis == 'START') {
-                            $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
-                            $tiltLogicOp = true;
-                        } else {
-                            $query['where'][] = ')';
-                            $tiltLogicOp = false;
-                        }
-                    } else {
-                        $GLOBALS['log']->debug('illegal condition');
-                    }
+                if ($condition->value_type == 'Value' && !$condition->value && $condition->operator == 'Equal_To') {
+                    $value = "{$value} OR {$field} IS NULL";
                 }
 
-            }
+                $query = $this->whereNotSet($query, $where_set, $condition,
+                    $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $field, $value);
 
-            if (isset($query['where']) && $query['where']) {
-                array_unshift($query['where'], '(');
-                $query['where'][] = ') AND ';
+                $tiltLogicOp = false;
+            } else {
+                if ($condition->parenthesis) {
+                    if ($condition->parenthesis == 'START') {
+                        $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
+                        $tiltLogicOp = true;
+                    } else {
+                        $query['where'][] = ')';
+                        $tiltLogicOp = false;
+                    }
+                } else {
+                    $GLOBALS['log']->debug('illegal condition');
+                }
             }
-            $query['where'][] = $module->table_name . ".deleted = 0 " . $this->build_report_access_query($module,
-                    $module->table_name);
 
         }
+
+        if (isset($query['where']) && $query['where']) {
+            array_unshift($query['where'], '(');
+            $query['where'][] = ') AND ';
+        }
+        $query['where'][] = $bean->table_name . ".deleted = 0 " . $this->build_report_access_query($bean,
+                $bean->table_name);
+
+
 
         if ($closure) {
             $query['where'][] = ')';
@@ -2990,11 +2981,11 @@ class AOR_Report extends Basic
 
     /**
      * @param $rowArray
-     * @param $module
+     * @param $bean
      * @param $beanList
      * @return array
      */
-    private function checkIfUserIsAllowedAccessToRelatedModules($rowArray, $module, $beanList)
+    private function checkIfUserIsAllowedAccessToRelatedModules($rowArray, $bean, $beanList)
     {
         $isAllowed = true;
         foreach ($rowArray as $row) {
@@ -3004,8 +2995,8 @@ class AOR_Report extends Basic
             //path is stored as base64 encoded serialized php object
             $path = unserialize(base64_decode($condition->module_path));
 
-            $condition_module = $module;
-            $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $module->module_dir;
+            $condition_module = $bean;
+            $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $bean->module_dir;
             if ($isRelationshipExternalModule) {
                 //loop over each relationship field and check if allowed access
                 foreach ($path as $rel) {
@@ -3265,6 +3256,22 @@ class AOR_Report extends Basic
     {
         $sql2 = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 AND (field_order = $ChartObj->x_field OR field_order = $ChartObj->y_field) ORDER BY field_order ASC";
         $result = $this->db->query($sql2);
+        $rowArray = array();
+        while ($row = $this->db->fetchByAssoc($result)) {
+            array_push($rowArray, $row);
+        }
+
+        return $rowArray;
+    }
+
+    /**
+     * @return array
+     */
+    private function getChartDataArray2($reportId)
+    {
+        $sql = "SELECT id FROM aor_conditions WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 ORDER BY condition_order ASC";
+        $result = $this->db->query($sql);
+
         $rowArray = array();
         while ($row = $this->db->fetchByAssoc($result)) {
             array_push($rowArray, $row);
