@@ -1194,16 +1194,7 @@ class AOR_Report extends Basic
         return $queryDataArray;
     }
 
-    /**
-     * @param $name
-     * @param $alias
-     * @param $parentAlias
-     * @param SugarBean $module
-     * @param $type
-     * @param array $query
-     * @param SugarBean|null $rel_module
-     * @return array
-     */
+
     public function buildReportQueryJoin(
         $name,
         $alias,
@@ -1263,26 +1254,6 @@ class AOR_Report extends Basic
 
 
     public function buildReportQueryJoinChart(&$dataObject, $relationship, $type = 'relationship') {
-
-//        $name,//$relationship
-//        $alias,//$table_alias
-//        $parentAlias,//$oldAlias
-//        SugarBean $module,//$field_module
-//        $type,//'relationship'
-//        $query = array(),//$query
-//        SugarBean $rel_module = null//$new_field_module
-
-//        $dataObject = array(
-//            'beanList'=>null,
-//            'queryArray'=>null,
-//            'sqlQuery'=>null,
-//            'field'=>null,
-//            'module'=>null,
-//            'fieldModule'=>null,
-//            'tableAlias'=>null,
-//            'oldAlias'=>null,
-//            'timeDate'=>null,
-//        );
 
         $module = $dataObject['fieldModule'];
         $name = $relationship;
@@ -1607,28 +1578,17 @@ class AOR_Report extends Basic
         foreach ($rowArray as $row) {
             $condition = new AOR_Condition();
             $condition->retrieve($row['id']);
-
-            //path is stored as base64 encoded serialized php object
-            $path = unserialize(base64_decode($condition->module_path));//TODO: Investigate why path is being set from unknown property in AOR_Condition (DT)
-
-            $oldAlias = $dataObject['module']->table_name;
-            $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $dataObject['module']->module_dir;
-            //check if relationship to field outside this module is set for condition
-            if ($isRelationshipExternalModule) {
-                //loop over each relationship field and check if allowed access
+            // --- sql query building
+            $path = unserialize(base64_decode($dataObject['field']->module_path));
+            $pathExists = !empty($path[0]);
+            $PathIsNotModuleDir = $path[0] != $dataObject['module']->module_dir;
+            if ($pathExists && $PathIsNotModuleDir) {
                 foreach ($path as $relationship) {
-                    if (empty($relationship)) {
-                        continue;
-                    }
-                    // Bug: Prevents relationships from loading.
-                    $new_condition_module = new $beanList[getRelatedModule($dataObject['module']->module_dir, $relationship)];
-                    $oldAlias = $dataObject['module']->table_name;
-                    $dataObject['module']->table_name = $dataObject['module']->table_name . ":" . $relationship;
-                    $dataObject['queryArray'] = $this->buildReportQueryJoin($relationship, $dataObject['module']->table_name, $oldAlias, $dataObject['module'],
-                        'relationship', $dataObject['queryArray'], $new_condition_module);
-                    $dataObject['module'] = $new_condition_module;
+                    $this->buildReportQueryJoinChart($dataObject,$relationship,'relationship');
                 }
             }
+            // --- sql query building
+
 
             //check if condition is in the allowed operator list
             if (isset($aor_sql_operator_list[$condition->operator])) {
@@ -1640,26 +1600,26 @@ class AOR_Report extends Basic
                         list($data, $condition) = $this->primeDataForRelate($data, $condition, $dataObject['module']);
                         break;
                     case 'link':
-                        list($dataObject['module']->table_name, $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLink($dataObject['queryArray'],
-                            $data, $beanList, $dataObject['module'], $oldAlias, $path, $relationship, $condition, $dataObject['module']->table_name);
+                        list($dataObject['tableAlias'], $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLink($dataObject['queryArray'],
+                            $data, $beanList, $dataObject['module'], $dataObject['oldAlias'], $path, $relationship, $condition, $dataObject['tableAlias']);
                         break;
                 }
 
 
-                $tableName = $dataObject['module']->table_name;
+                $tableName = $dataObject['tableAlias'];
                 $fieldName = $condition->field;
                 $dataSourceIsSet = isset($data['source']);
                 if ($dataSourceIsSet) {
                     $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
                 }
                 //setValueSuffix
-                $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $dataObject['module']->table_name, $fieldName);
+                $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $dataObject['tableAlias'], $fieldName);
 
                 //check if its a custom field the set the field parameter
-//                    $field = $this->setFieldSuffixOld($data, $dataObject['module']->table_name, $condition);
+//                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
 
                 //buildJoinQueryForCustomFields
-                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $dataObject['module']->table_name, $tableName,
+                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $dataObject['tableAlias'], $tableName,
                     $dataObject['module']);
 
                 //check for custom selectable parameter from report
@@ -1679,10 +1639,10 @@ class AOR_Report extends Basic
                             $dataObject['module'],
                             $condition,
                             $beanList,
-                            $oldAlias,
+                            $dataObject['oldAlias'],
                             $path,
                             $relationship,
-                            $dataObject['module']->table_name,
+                            $dataObject['tableAlias'],
                             $sugar_config,
                             $field,
                             $app_list_strings,
