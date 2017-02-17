@@ -1093,16 +1093,13 @@ class AOR_Report extends Basic
         if($moduleBeanName === null){
             throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
         }
-
         //Check if the user has access to the target module
         if (!(ACLController::checkAccess($moduleName, 'list', true))) {
             throw new Exception('AOR_Report:buildReportQueryChart: User Not Allowed Access To This Module', 101);
         }
 
-
         $bean = new $beanList[$moduleName];
         $queryDataArray = $this->DataArrayGetTableData($queryDataArray, $bean);
-
 
         $dataObject['reportId']=$reportId;
         $dataObject['module'] = $bean;
@@ -1110,7 +1107,6 @@ class AOR_Report extends Basic
         $dataObject['beanList'] = $beanList;
         $dataObject['timeDate']= $timedate;
 
-//        $query_array = $this->buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, $model);
         $this->buildQueryArraySelectForChart($dataObject, $model);
 
         try {
@@ -1140,22 +1136,8 @@ class AOR_Report extends Basic
 
 
 
-//    public function buildQueryArraySelectForChart($beanList, $moduleName, $timedate, $reportId, Model $model)
     public function buildQueryArraySelectForChart(&$dataObject, Model $model)
     {
-//        $queryDataArray = array();
-//        $module = $beanList[$moduleName];
-//
-//        if($module === null){
-//            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
-//        }
-
-//        $dataObject['module'] = $bean;
-//        $dataObject['queryArray'] = $queryDataArray;
-//        $dataObject['beanList'] = $beanList;
-//        $dataObject['timeDate']= $timedate;
-
-
         $bean = $dataObject['module'];
         $reportId = $dataObject['reportId'];
 
@@ -1597,11 +1579,9 @@ class AOR_Report extends Basic
 
 
 
-//    public function buildQueryArrayWhereForChart($beanList, $moduleName, $queryDataArray, $app_list_strings, $sugar_config, $queryArray = array(), $extra = array())
     public function buildQueryArrayWhereForChart(&$dataObject, $app_list_strings, $sugar_config,  $extra = array())
     {
         $beanList = $dataObject['beanList'];
-        $bean = $dataObject['module'];       
 
         $aor_sql_operator_list = $this->getAllowedOperatorList();
         $tiltLogicOp = true;
@@ -1615,12 +1595,7 @@ class AOR_Report extends Basic
             $dataObject['queryArray']['where'][] = '(';
             $closure = true;
         }
-//
-//        $moduleBeanName = $beanList[$moduleName];
-//
-//        if($moduleBeanName === null){
-//            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
-//        }
+
         $rowArray = $this->getChartDataArray2($dataObject['reportId']);
 
         //checkIfUserIsAllowAccessToModule
@@ -1634,60 +1609,58 @@ class AOR_Report extends Basic
             $condition->retrieve($row['id']);
 
             //path is stored as base64 encoded serialized php object
-            $path = unserialize(base64_decode($condition->module_path));
+            $path = unserialize(base64_decode($condition->module_path));//TODO: Investigate why path is being set from unknown property in AOR_Condition (DT)
 
-            $condition_module = $dataObject['module'];
-            $table_alias = $condition_module->table_name;
-            $oldAlias = $table_alias;
+            $oldAlias = $dataObject['module']->table_name;
             $isRelationshipExternalModule = !empty($path[0]) && $path[0] != $dataObject['module']->module_dir;
             //check if relationship to field outside this module is set for condition
             if ($isRelationshipExternalModule) {
                 //loop over each relationship field and check if allowed access
-                foreach ($path as $rel) {
-                    if (empty($rel)) {
+                foreach ($path as $relationship) {
+                    if (empty($relationship)) {
                         continue;
                     }
                     // Bug: Prevents relationships from loading.
-                    $new_condition_module = new $beanList[getRelatedModule($condition_module->module_dir, $rel)];
-                    $oldAlias = $table_alias;
-                    $table_alias = $table_alias . ":" . $rel;
-                    $dataObject['queryArray'] = $this->buildReportQueryJoin($rel, $table_alias, $oldAlias, $condition_module,
+                    $new_condition_module = new $beanList[getRelatedModule($dataObject['module']->module_dir, $relationship)];
+                    $oldAlias = $dataObject['module']->table_name;
+                    $dataObject['module']->table_name = $dataObject['module']->table_name . ":" . $relationship;
+                    $dataObject['queryArray'] = $this->buildReportQueryJoin($relationship, $dataObject['module']->table_name, $oldAlias, $dataObject['module'],
                         'relationship', $dataObject['queryArray'], $new_condition_module);
-                    $condition_module = $new_condition_module;
+                    $dataObject['module'] = $new_condition_module;
                 }
             }
 
             //check if condition is in the allowed operator list
             if (isset($aor_sql_operator_list[$condition->operator])) {
                 $where_set = false;
-                $data = $condition_module->field_defs[$condition->field];
+                $data = $dataObject['module']->field_defs[$condition->field];
                 //check data type of field and process
                 switch ($data['type']) {
                     case 'relate':
-                        list($data, $condition) = $this->primeDataForRelate($data, $condition, $condition_module);
+                        list($data, $condition) = $this->primeDataForRelate($data, $condition, $dataObject['module']);
                         break;
                     case 'link':
-                        list($table_alias, $dataObject['queryArray'], $condition_module) = $this->primeDataForLink($dataObject['queryArray'],
-                            $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition, $table_alias);
+                        list($dataObject['module']->table_name, $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLink($dataObject['queryArray'],
+                            $data, $beanList, $dataObject['module'], $oldAlias, $path, $relationship, $condition, $dataObject['module']->table_name);
                         break;
                 }
 
 
-                $tableName = $table_alias;
+                $tableName = $dataObject['module']->table_name;
                 $fieldName = $condition->field;
                 $dataSourceIsSet = isset($data['source']);
                 if ($dataSourceIsSet) {
                     $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
                 }
                 //setValueSuffix
-                $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias, $fieldName);
+                $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $dataObject['module']->table_name, $fieldName);
 
                 //check if its a custom field the set the field parameter
-//                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
+//                    $field = $this->setFieldSuffixOld($data, $dataObject['module']->table_name, $condition);
 
                 //buildJoinQueryForCustomFields
-                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $table_alias, $tableName,
-                    $condition_module);
+                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $dataObject['module']->table_name, $tableName,
+                    $dataObject['module']);
 
                 //check for custom selectable parameter from report
                 $this->buildConditionParams($condition);
@@ -1703,13 +1676,13 @@ class AOR_Report extends Basic
                     ) = $this->buildQueryForConditionTypeChart(
                     $dataObject['queryArray'],
                             $conditionType,
-                            $condition_module,
+                            $dataObject['module'],
                             $condition,
                             $beanList,
                             $oldAlias,
                             $path,
-                            $rel,
-                            $table_alias,
+                            $relationship,
+                            $dataObject['module']->table_name,
                             $sugar_config,
                             $field,
                             $app_list_strings,
