@@ -3219,8 +3219,8 @@ class AOR_Report extends Basic
     private function DataArrayGetTableData($queryDataArray, $bean)
     {
         $queryDataArray['tableName'] = $bean->table_name;
-        $queryDataArray['id_select'][$bean->table_name] = $this->db->quoteIdentifier($bean->table_name) . ".id AS '" . $bean->table_name . "_id'";
-        $queryDataArray['id_select_group'][$bean->table_name] = $this->db->quoteIdentifier($bean->table_name) . ".id";
+        $queryDataArray['id_select'][$bean->table_name] = $bean->db->quoteIdentifier($bean->table_name) . ".id AS '" . $bean->table_name . "_id'";
+        $queryDataArray['id_select_group'][$bean->table_name] = $bean->db->quoteIdentifier($bean->table_name) . ".id";
 
         return $queryDataArray;
     }
