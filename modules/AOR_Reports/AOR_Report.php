@@ -1254,29 +1254,43 @@ class AOR_Report extends Basic
     public function buildReportQueryJoinChart(&$dataObject, $relationship, $type = 'relationship') {
 
 
-        $moduleBeanName = $dataObject['beanlist'][$relationship];
-        $dataObject['fieldModule']= new $dataObject['beanlist'][$beanName];
-//        $module = $dataObject['module'];
-        $name = $relationship;
-        $beanList = $dataObject['beanList'];
-        $field_module = $dataObject['fieldModule'];
-        $related_module = new $beanList[getRelatedModule($field_module->module_dir, $relationship)];
-        $tableAlias  = $dataObject['tableAlias'];
-        $parentAlias = $dataObject['oldAlias'];
+        $query = $dataObject['queryArray'];
+        $parentModulebean = $dataObject['module']; /**  @var $parentModulebean SugarBean */
+        $relationshipExists = $parentModulebean->load_relationship($relationship);
+        $relationshipLink = $parentModulebean->$relationship; /** @var $relationshipObj Link2 */
+        $relationshipSide = $parentModulebean->$relationship->getSide();
+
+        $relObj = $relationshipLink->getRelationshipObject();
+//        $test2 = get_class($test);/** @var  $test2 M2MRelationship */
+
+        if($relationshipSide == 'LHS'){
+            $relModuleSide = 'rhs_module';
+        }else{
+            $relModuleSide = 'lhs_module';
+        }
+        $relatedModuleName = $relObj->def[$relModuleSide];
+
+        $relatedModuleBean = BeanFactory::getBean($relatedModuleName);
+
+        $dataObject['fieldModule'] = $relatedModuleBean;
+        $tableAlias  = $relatedModuleBean->table_name;
+        $parentAlias = $parentModulebean->table_name;
         $tableAlias = $tableAlias . ":" . $tableAlias;
 
         if (!isset($query['join'][$tableAlias])) {
 
             switch ($type) {
                 case 'custom':
-                    $query['join'][$tableAlias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($module->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($name) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($name) . '.id_c ';
+                    $query['join'][$tableAlias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($parentModulebean->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($relationship) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($relationship) . '.id_c ';
                     break;
 
                 case 'relationship':
-                    if ($module->load_relationship($name)) {
+                    if ($relationshipExists) {
                         $params['join_type'] = 'LEFT JOIN';
-                        if ($module->$name->relationship_type != 'one-to-many') {
-                            if ($module->$name->getSide() == REL_LHS) {
+                        $isOneToMany = $parentModulebean->$relationship->relationship_type != 'one-to-many';
+                        if ($isOneToMany) {
+                            $RelationshipIsLeftHandSide = $relationshipSide == REL_LHS;
+                            if ($RelationshipIsLeftHandSide) {
                                 $params['right_join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
                                 $params['join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
                                 $params['left_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
@@ -1293,10 +1307,10 @@ class AOR_Report extends Basic
                         }
                         $linkAlias = $parentAlias . "|" . $tableAlias;
                         $params['join_table_link_alias'] = $this->db->quoteIdentifier($linkAlias);
-                        $join = $module->$name->getJoin($params, true);
+                        $join = $parentModulebean->$relationship->getJoin($params, true);
                         $query['join'][$tableAlias] = $join['join'];
-                        if ($related_module != null) {
-                            $query['join'][$tableAlias] .= $this->build_report_access_query($related_module, $name);
+                        if ($relatedModuleBean != null) {
+                            $query['join'][$tableAlias] .= $this->build_report_access_query($relatedModuleBean, $relationship);
                         }
                         $query['id_select'][$tableAlias] = $join['select'] . " AS '" . $tableAlias . "_id'";
                         $query['id_select_group'][$tableAlias] = $join['select'];
@@ -1309,8 +1323,8 @@ class AOR_Report extends Basic
 
         }
 
-        $dataObject['fieldModule'] = $related_module;
-        $dataObject['sqlQuery'] = $query;
+        $dataObject['queryArray'] = $query;
+        $dataObject['fieldModule'] = $relatedModuleBean;
     }
 
 
