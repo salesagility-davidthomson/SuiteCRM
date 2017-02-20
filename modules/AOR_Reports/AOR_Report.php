@@ -1081,7 +1081,9 @@ class AOR_Report extends Basic
             'tableAlias'=>null,
             'oldAlias'=>null,
             'timeDate'=>null,
-            'selectField'=>null
+            'selectField'=>null,
+            'condition'=>null,
+            'conditionFieldDefs'=>null,
         );
         $query = '';
         $reportId = $this->id;
@@ -1593,7 +1595,7 @@ class AOR_Report extends Basic
         foreach ($rowArray as $row) {
             $condition = new AOR_Condition();
             $condition->retrieve($row['id']);
-            // --- sql query building
+            $dataObject['condition'] = $condition;
             $path = unserialize(base64_decode($dataObject['field']->module_path));
             $pathExists = !empty($path[0]);
             $PathIsNotModuleDir = $path[0] != $dataObject['module']->module_dir;
@@ -1602,30 +1604,29 @@ class AOR_Report extends Basic
                     $this->buildReportQueryJoinChart($dataObject,$relationship,'relationship');
                 }
             }
-            // --- sql query building
-
 
             //check if condition is in the allowed operator list
             if (isset($aor_sql_operator_list[$condition->operator])) {
-                $where_set = false;
-                $data = $dataObject['module']->field_defs[$condition->field];
+//                $where_set = false;
+//                $dataObject['conditionFieldDefs'] = $dataObject['module']->field_defs[$condition->field];
                 //check data type of field and process
-                switch ($data['type']) {
-                    case 'relate':
-                        list($data, $condition) = $this->primeDataForRelate($data, $condition, $dataObject['module']);
-                        break;
-                    case 'link':
-                        list($dataObject['tableAlias'], $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLink($dataObject['queryArray'],
-                            $data, $beanList, $dataObject['module'], $dataObject['oldAlias'], $path, $relationship, $condition, $dataObject['tableAlias']);
-                        break;
-                }
+//                switch ($dataObject['conditionFieldDefs']['type']) {
+//                    case 'relate':
+//                        list($conditionFieldDefs, $condition) = $this->primeDataForRelateChart($dataObject, $dataObject['module']);
+//                        break;
+//                    case 'link':
+//                        $conditionFieldDefs = $dataObject['module']->field_defs[$condition->field];
+//                        list($dataObject['tableAlias'], $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLinkChart($dataObject['queryArray'],
+//                            $conditionFieldDefs, $beanList, $dataObject['module'], $dataObject['oldAlias'], $path, $relationship, $condition, $dataObject['tableAlias']);
+//                        break;
+//                }
 
-
+                $conditionFieldDefs = $dataObject['module']->field_defs[$condition->field];
                 $tableName = $dataObject['tableAlias'];
                 $fieldName = $condition->field;
-                $dataSourceIsSet = isset($data['source']);
+                $dataSourceIsSet = isset($conditionFieldDefs['source']);
                 if ($dataSourceIsSet) {
-                    $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
+                    $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
                 }
                 //setValueSuffix
                 $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $dataObject['tableAlias'], $fieldName);
@@ -2346,6 +2347,22 @@ class AOR_Report extends Basic
         return array($data, $condition);
     }
 
+
+
+    private function primeDataForRelateChart($dataObject) {
+        $condition = $dataObject['condition'];
+        $conditionFieldDefs = $dataObject['conditionFieldDefs'];
+        if (isset($conditionFieldDefs['id_name'])) {
+            $condition->field = $conditionFieldDefs['id_name'];
+            $data_new = $dataObject['module']->field_defs[$condition->field];
+            if (!empty($data_new['source']) && $data_new['source'] == 'non-db' && $data_new['type'] != 'link' && isset($conditionFieldDefs['link'])) {
+                $data_new['type'] = 'link';
+                $data_new['relationship'] = $conditionFieldDefs['link'];
+            }
+            $conditionFieldDefs = $data_new;
+        }
+    }
+
     /**
      * @param $query
      * @param $data
@@ -2389,6 +2406,41 @@ class AOR_Report extends Basic
         return array($table_alias, $query, $condition_module);
     }
 
+
+
+    private function primeDataForLinkChart(
+        $query,
+        $data,
+        $beanList,
+        $condition_module,
+        $oldAlias,
+        $path,
+        $rel,
+        $condition,
+        $table_alias
+    ) {
+        if ($data['source'] == 'non-db') {
+            $new_field_module = new $beanList[getRelatedModule($condition_module->module_dir,
+                $data['relationship'])];
+            $table_alias = $data['relationship'];
+            $query = $this->buildReportQueryJoin($data['relationship'], $table_alias, $oldAlias,
+                $condition_module, 'relationship', $query, $new_field_module);
+            $condition_module = $new_field_module;
+
+            // Debugging: security groups conditions - It's a hack to just get the query working
+            if ($condition_module->module_dir = 'SecurityGroups' && count($path) > 1) {
+                $table_alias = $oldAlias . ':' . $rel;
+            }
+            $condition->field = 'id';
+
+            return array($table_alias, $query, $condition_module);
+        }
+
+        return array($table_alias, $query, $condition_module);
+    }
+
+
+
     /**
      * @param $isCustomField
      * @param $tableName
@@ -2419,7 +2471,7 @@ class AOR_Report extends Basic
     /**
      * @param $condition
      */
-    private function buildConditionParams($condition) {
+    private function buildConditionParams(&$condition) {
         if (!empty($this->user_parameters[$condition->id])) {
             if ($condition->parameter) {
                 $condParam = $this->user_parameters[$condition->id];
