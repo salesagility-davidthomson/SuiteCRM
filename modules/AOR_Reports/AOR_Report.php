@@ -1610,19 +1610,6 @@ class AOR_Report extends Basic
 
             //check if condition is in the allowed operator list
             if (isset($aor_sql_operator_list[$condition->operator])) {
-//                $where_set = false;
-//                $dataObject['conditionFieldDefs'] = $dataObject['module']->field_defs[$condition->field];
-                //check data type of field and process
-//                switch ($dataObject['conditionFieldDefs']['type']) {
-//                    case 'relate':
-//                        list($conditionFieldDefs, $condition) = $this->primeDataForRelateChart($dataObject, $dataObject['module']);
-//                        break;
-//                    case 'link':
-//                        $conditionFieldDefs = $dataObject['module']->field_defs[$condition->field];
-//                        list($dataObject['tableAlias'], $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLinkChart($dataObject['queryArray'],
-//                            $conditionFieldDefs, $beanList, $dataObject['module'], $dataObject['oldAlias'], $path, $relationship, $condition, $dataObject['tableAlias']);
-//                        break;
-//                }
 
                 $conditionFieldDefs = $dataObject['module']->field_defs[$condition->field];
                 $tableName = $dataObject['tableAlias'];
