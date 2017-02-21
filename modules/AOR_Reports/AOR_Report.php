@@ -1101,13 +1101,16 @@ class AOR_Report extends Basic
         }
 
         $bean = new $beanList[$moduleName];
-        $queryDataArray = $this->DataArrayGetTableData($queryDataArray, $bean);
 
         $dataObject['reportId']=$reportId;
         $dataObject['module'] = $bean;
         $dataObject['queryArray'] = $queryDataArray;
         $dataObject['beanList'] = $beanList;
         $dataObject['timeDate']= $timedate;
+
+        $this->DataArrayGetTableData($queryDataArray, $bean);
+
+
 
         $this->buildQueryArraySelectForChart($dataObject, $model);
 
@@ -3268,13 +3271,15 @@ class AOR_Report extends Basic
      * @return array
      * @internal param $moduleName
      */
-    private function DataArrayGetTableData($queryDataArray, $bean)
+    private function DataArrayGetTableData(&$dataObject)
     {
+
+        $bean = $dataObject['module'];
         $queryDataArray['tableName'] = $bean->table_name;
         $queryDataArray['id_select'][$bean->table_name] = $bean->db->quoteIdentifier($bean->table_name) . ".id AS '" . $bean->table_name . "_id'";
         $queryDataArray['id_select_group'][$bean->table_name] = $bean->db->quoteIdentifier($bean->table_name) . ".id";
 
-        return $queryDataArray;
+        $dataObject['queryArray'] =  $queryDataArray;
     }
 
     /**
