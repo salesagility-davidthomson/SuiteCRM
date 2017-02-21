@@ -1573,28 +1573,20 @@ class AOR_Report extends Basic
                 $this->buildConditionUserParamsChart($dataObject);
 
                 //what type of condition is it?
+//                $relationship,//$data['relationship']? see buildReportQueryJoin
                 list(
                     $condition,
                     $dataObject['queryArray'],
                     $value,
                     $conditionField,
                     $where_set
-                    ) = $this->buildQueryForConditionTypeChart(
-                            $dataObject['queryArray'],
-                            $dataObject['condition']->value_type,
-                            $dataObject['module'],
-                            $dataObject['condition'],
-                            $dataObject['beanList'],
-                            $dataObject['oldAlias'],
-                            unserialize(base64_decode($dataObject['field']->module_path)),
-                            $relationship,
-                            $dataObject['tableAlias'],
-                            $sugar_config,
-                            $dataObject['queryArray']['conditionFields'][0],
-                            $app_list_strings,
-                    $dataObject['allowedOperatorList'],
-                    $dataObject['tiltLogicOperator']
-                );
+                    ) = $this->buildQueryForConditionTypeChart( $dataObject, $sugar_config,$app_list_strings );
+                $condition = $dataObject['condition']
+                    $dataObject['queryArray'],
+                    $value,
+                    $conditionField,
+                    $where_set
+
 
                 //handle like conditions
                 $conditionOperator = $condition->operator;
@@ -2750,60 +2742,40 @@ class AOR_Report extends Basic
 
 
 
-    /**
-     * @param $query
-     * @param $conditionType
-     * @param $condition_module
-     * @param $condition
-     * @param $beanList
-     * @param $oldAlias
-     * @param $path
-     * @param $relationship
-     * @param $table_alias
-     * @param $sugar_config
-     * @param $field
-     * @param $app_list_strings
-     * @param $aor_sql_operator_list
-     * @param $tiltLogicOp
-     * @param $current_user
-     * @return array
-     */
-    private function buildQueryForConditionTypeChart(
-        $query,
-        $conditionType,
-        $condition_module,
-        $condition,
-        $beanList,
-        $oldAlias,
-        $path,
-        $relationship,//$data['relationship']? see buildReportQueryJoin
-        $table_alias,
-        $sugar_config,
-        $field,
-        $app_list_strings,
-        $aor_sql_operator_list,
-        $tiltLogicOp
-    ) {
-        switch ($conditionType) {
+    private function buildQueryForConditionTypeChart(&$dataObject,$sugar_config,$app_list_strings) {
+
+        $queryArray = $dataObject['queryArray'];
+        $conditionType = $dataObject['condition']->value_type;
+        $condition_module = $dataObject['module'];
+        $condition = $dataObject['condition'];
+        $beanList = $dataObject['beanList'];
+        $oldAlias = $dataObject['oldAlias'];
+        $path = unserialize(base64_decode($dataObject['field']->module_path));
+//                            $relationship,
+        $table_alias = $dataObject['tableAlias'];
+        $field = $dataObject['queryArray']['conditionFields'][0];
+        $aor_sql_operator_list = $dataObject['allowedOperatorList'];
+        $tiltLogicOp = $dataObject['tiltLogicOperator'];
+        switch ($dataObject['condition']->value_type) {
             case 'Field': // is it a specific field
                 //processWhereConditionForTypeField
-                $data = $condition_module->field_defs[$condition->value];
+                $data = $dataObject['module']->field_defs[$dataObject['condition']->value];
 
                 switch ($data['type']) {
                     case 'relate':
-                        list($data, $condition) = $this->primeDataForRelate($data, $condition,
-                            $condition_module);
+                        list($data, $dataObject['condition']) = $this->primeDataForRelate($data, $dataObject['condition'],
+                            $dataObject['module']);
                         break;
                     case 'link':
-                        list($table_alias, $query, $condition_module) = $this->primeDataForLink($query,
-                            $data, $beanList, $condition_module, $oldAlias, $path, $relationship, $condition,
+                        list($table_alias, $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLink($dataObject['queryArray'],
+                            $data, $dataObject['beanList'], $dataObject['module'], $dataObject['oldAlias'], $path, $relationship, $dataObject['condition'],
                             $table_alias);
                         break;
                 }
 
 
-                $tableName = $condition_module->table_name;
-                $fieldName = $condition->value;
+                $tableName = $dataObject['module']->table_name;
+                $fieldName = $dataObject['condition']->value;
                 $dataSourceIsSet = isset($data['source']);
                 if ($dataSourceIsSet) {
                     $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
@@ -2811,27 +2783,27 @@ class AOR_Report extends Basic
 
                 //setValueSuffix
                 $value = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias, $fieldName);
-                $query = $this->buildJoinQueryForCustomFields($isCustomField, $query, $table_alias,
+                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $table_alias,
                     $tableName,
-                    $condition_module);
+                    $dataObject['module']);
                 break;
 
             case 'Date': //is it a date
                 //processWhereConditionForTypeDate
-                $params = unserialize(base64_decode($condition->value));
+                $params = unserialize(base64_decode($dataObject['condition']->value));
 
                 // Fix for issue #1272 - AOR_Report module cannot update Date type parameter.
                 if ($params == false) {
-                    $params = $condition->value;
+                    $params = $dataObject['condition']->value;
                 }
 
                 $firstParam = $params[0];
-                list($value, $field, $query) = $this->processForDateFrom(
+                list($value, $field, $dataObject['queryArray']) = $this->processForDateFrom(
                     $firstParam,
                     $sugar_config,
                     $field,
-                    $query,
-                    $condition_module);
+                    $dataObject['queryArray'],
+                    $dataObject['module']);
 
                 $secondParam = $params[1];
                 $thirdParam = $params[2];
@@ -2844,29 +2816,29 @@ class AOR_Report extends Basic
             case 'Multi': //are there multiple conditions setup
                 //processWhereConditionForTypeMulti
                 $sep = ' AND ';
-                if ($condition->operator == 'Equal_To') {
+                if ($dataObject['condition']->operator == 'Equal_To') {
                     $sep = ' OR ';
                 }
-                $multi_values = unencodeMultienum($condition->value);
+                $multi_values = unencodeMultienum($dataObject['condition']->value);
                 if (!empty($multi_values)) {
                     $value = '(';
                     foreach ($multi_values as $multi_value) {
                         if ($value != '(') {
                             $value .= $sep;
                         }
-                        $value .= $field . ' ' . $aor_sql_operator_list[$condition->operator] . " '" . $multi_value . "'";
+                        $value .= $field . ' ' . $aor_sql_operator_list[$dataObject['condition']->operator] . " '" . $multi_value . "'";
                     }
                     $value .= ')';
                 }
-                $query['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . $value;
+                $dataObject['queryArray']['where'][] = ($tiltLogicOp ? '' : ($dataObject['condition']->logic_op ? $dataObject['condition']->logic_op . ' ' : 'AND ')) . $value;
                 $where_set = true;
                 break;
             case "Period": //is it a period of time
                 //processWhereConditionForTypePeriod
-                if (array_key_exists($condition->value, $app_list_strings['date_time_period_list'])) {
-                    $params = $condition->value;
+                if (array_key_exists($dataObject['condition']->value, $app_list_strings['date_time_period_list'])) {
+                    $params = $dataObject['condition']->value;
                 } else {
-                    $params = base64_decode($condition->value);
+                    $params = base64_decode($dataObject['condition']->value);
                 }
                 $value = '"' . getPeriodDate($params)->format('Y-m-d H:i:s') . '"';
                 break;
@@ -2877,16 +2849,16 @@ class AOR_Report extends Basic
                 break;
             case 'Value': //is it a specific value
                 //processWhereConditionForTypeValue
-                $value = "'" . $this->db->quote($condition->value) . "'";
+                $value = "'" . $this->db->quote($dataObject['condition']->value) . "'";
                 break;
             default:
-                $value = "'" . $this->db->quote($condition->value) . "'";
+                $value = "'" . $this->db->quote($dataObject['condition']->value) . "'";
                 break;
         }
 
         return array(
-            $condition,
-            $query,
+            $dataObject['condition'],
+            $dataObject['queryArray'],
             $value,
             $field,
             $where_set
