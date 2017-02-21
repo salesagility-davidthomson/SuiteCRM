@@ -1096,7 +1096,7 @@ class AOR_Report extends Basic
         $this->DataArrayGetTableData($dataObject);
         $this->buildQueryArraySelectForChart($dataObject, $model);
         try {
-            $this->buildQueryArrayWhereForChart($dataObject, $app_list_strings, $sugar_config, $extra);
+            $this->buildQueryArrayWhereForChart($dataObject, $model, $app_list_strings, $sugar_config, $extra);
         } catch (Exception $e) {
             throw new Exception('Caught exception:' . $e->getMessage(), $e->getCode());
         }
@@ -1544,7 +1544,7 @@ class AOR_Report extends Basic
 
 
 
-    public function buildQueryArrayWhereForChart(&$dataObject, $app_list_strings, $sugar_config,  $extra = array())
+    public function buildQueryArrayWhereForChart(&$dataObject, $model, $app_list_strings, $sugar_config,  $extra = array())
     {
         $beanList = $dataObject['beanList'];
 
@@ -1561,7 +1561,7 @@ class AOR_Report extends Basic
             $closure = true;
         }
 
-        $rowArray = $this->getChartDataArray2($dataObject['reportId']);
+        $rowArray = $model->getChartDataArray2($dataObject['reportId'], $dataObject['module']);
 
         //checkIfUserIsAllowAccessToModule
         if (!$this->checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)) {
@@ -3306,38 +3306,4 @@ class AOR_Report extends Basic
 
         $dataObject['queryArray'] =  $queryDataArray;
     }
-
-    /**
-     * @param $reportId
-     * @param $ChartObj
-     * @return array
-     */
-    private function getChartDataArray($reportId, $ChartObj)
-    {
-        $sql2 = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 AND (field_order = $ChartObj->x_field OR field_order = $ChartObj->y_field) ORDER BY field_order ASC";
-        $result = $this->db->query($sql2);
-        $rowArray = array();
-        while ($row = $this->db->fetchByAssoc($result)) {
-            array_push($rowArray, $row);
-        }
-
-        return $rowArray;
-    }
-
-    /**
-     * @return array
-     */
-    private function getChartDataArray2($reportId)
-    {
-        $sql = "SELECT id FROM aor_conditions WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 ORDER BY condition_order ASC";
-        $result = $this->db->query($sql);
-
-        $rowArray = array();
-        while ($row = $this->db->fetchByAssoc($result)) {
-            array_push($rowArray, $row);
-        }
-
-        return $rowArray;
-    }
-
 }

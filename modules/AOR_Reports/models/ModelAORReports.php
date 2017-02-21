@@ -71,6 +71,19 @@ class ModelAORReports
         return $rowArray;
     }
 
+    public function getChartDataArray2($reportId, $bean)
+    {
+        $sql = "SELECT id FROM aor_conditions WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 ORDER BY condition_order ASC";
+        $result = $bean->db->query($sql);
+
+        $rowArray = array();
+        while ($row = $bean->db->fetchByAssoc($result)) {
+            array_push($rowArray, $row);
+        }
+
+        return $rowArray;
+    }
+
 
 
 
