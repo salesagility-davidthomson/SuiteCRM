@@ -1632,7 +1632,7 @@ class AOR_Report extends Basic
                     $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
                 }
                 //setValueSuffix
-                $field = $this->setFieldTablesSuffix($isCustomField, $tableName, $dataObject['tableAlias'], $fieldName);
+                $field = $this->setFieldTablesSuffixChart($isCustomField, $tableName, $dataObject['tableAlias'], $fieldName);
 
                 //check if its a custom field the set the field parameter
 //                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
@@ -2453,6 +2453,26 @@ class AOR_Report extends Basic
      * @return string
      */
     private function setFieldTablesSuffix(
+        $isCustomField,
+        $tableName,
+        $tableAlias,
+        $fieldName,
+        $suffix = '_cstm'
+    ) {
+
+        if ($isCustomField) {
+            $value = $tableName . $suffix . '.' . $fieldName;
+
+            return $value;
+        } else {
+            $value = ($tableAlias ? "`$tableAlias`" : $tableName) . '.' . $fieldName;
+
+            return $value;
+        }
+    }
+
+
+    private function setFieldTablesSuffixChart(
         $isCustomField,
         $tableName,
         $tableAlias,
