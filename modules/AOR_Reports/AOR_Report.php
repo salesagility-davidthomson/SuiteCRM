@@ -1531,10 +1531,6 @@ class AOR_Report extends Basic
         return $query;
     }
 
-
-
-
-
     public function buildQueryArrayWhereForChart(&$dataObject, $model, $app_list_strings, $sugar_config,  $extra = array())
     {
         if (isset($extra['where']) && $extra['where']) {
@@ -2780,7 +2776,7 @@ class AOR_Report extends Basic
         $beanList,
         $oldAlias,
         $path,
-        $relationship,
+        $relationship,//$data['relationship']? see buildReportQueryJoin
         $table_alias,
         $sugar_config,
         $field,
