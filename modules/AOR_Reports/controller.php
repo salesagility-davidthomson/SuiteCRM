@@ -673,7 +673,7 @@ class AOR_ReportsController extends SugarController {
 //        die('here');
 
         $reportParams =$model->getReportParameters($this->bean);
-        $bean->reportParameters = $reportParams;
+        $bean->user_parameters = $model->requestToUserParameters($_REQUEST);
         $this->view_object_map['reportParams'] =$reportParams;
 
 //        $reportHTML = $this->bean->buildMultiGroupReport(0,true);

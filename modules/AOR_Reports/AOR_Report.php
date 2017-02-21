@@ -1089,9 +1089,6 @@ class AOR_Report extends Basic
     }
 
 
-
-
-//    public function buildReportQueryChart($beanList, $timedate, $app_list_strings, $sugar_config, $extra = array())
     public function buildReportQueryChart(&$dataObject, $app_list_strings, $sugar_config, $extra = array())
     {
         $model = new Model();
@@ -1102,19 +1099,13 @@ class AOR_Report extends Basic
         } catch (Exception $e) {
             throw new Exception('Caught exception:' . $e->getMessage(), $e->getCode());
         }
-
-        $query_array = $dataObject['queryArray'];
-        $query = $dataObject['sqlQuery'];
-        $query = $this->buildSqlQuerySelect($query_array, $query);
-        $query = $this->buildSqlQueryGroupBy($query_array, $query);
-        $query = $this->buildSqlQueryFrom($query_array, $query);
-        $query = $this->buildSqlQueryJoin($query_array, $query);
-        $query = $this->buildSqlQueryWhere($query_array, $query);
-        $query = $this->buildSqlQueryGroupBy2($query_array, $query);
-        $query = $this->buildSqlQuerySortBy($query_array, $query);
-
-        $dataObject['sqlQuery'] = $query;
-
+        $this->buildSqlQuerySelectChart($dataObject);
+        $this->buildSqlQueryGroupByChart($dataObject);
+        $this->buildSqlQueryFromChart($dataObject);
+        $this->buildSqlQueryJoinChart($dataObject);
+        $this->buildSqlQueryWhereChart($dataObject);
+        $this->buildSqlQueryGroupBy2Chart($dataObject);
+        $this->buildSqlQuerySortByChart($dataObject);
     }
 
 
@@ -1546,8 +1537,6 @@ class AOR_Report extends Basic
 
     public function buildQueryArrayWhereForChart(&$dataObject, $model, $app_list_strings, $sugar_config,  $extra = array())
     {
-        $allowedSqlOperators = $dataObject['allowedOperatorList'];
-
         if (isset($extra['where']) && $extra['where']) {
             $query_array['where'][] = implode(' AND ', $extra['where']) . ' AND ';
         }
@@ -2454,7 +2443,7 @@ class AOR_Report extends Basic
 
     private function buildConditionUserParamsChart(&$dataObject) {
         $condition = $dataObject['condition'];
-        $params = $this->reportParameters;
+        $params = $dataObject['user_parameters'];
         if (!empty($params[$condition->id])) {
             if ($condition->parameter) {
                 $condParam = $params[$condition->id];
@@ -3072,6 +3061,15 @@ class AOR_Report extends Basic
         return $query;
     }
 
+
+    private function buildSqlQuerySelectChart(&$dataObject)
+    {
+        foreach ($dataObject['queryArray']['select'] as $select) {
+            $dataObject['sqlQuery'] .= ($dataObject['sqlQuery'] == '' ? 'SELECT ' : ', ') . $select;
+        }
+    }
+
+
     /**
      * @param $query_array
      * @param $query
@@ -3090,6 +3088,16 @@ class AOR_Report extends Basic
         return $query;
     }
 
+
+    private function buildSqlQueryGroupByChart(&$dataObject)
+    {
+        if (empty($dataObject['queryArray']['group_by'])) {
+            foreach ($dataObject['queryArray']['id_select'] as $select) {
+                $dataObject['sqlQuery'] .= ', ' . $select;
+            }
+        }
+    }
+
     /**
      * @param $tableName
      * @param $query
@@ -3101,6 +3109,11 @@ class AOR_Report extends Basic
         $query .= ' FROM ' . $this->db->quoteIdentifier($query_array['tableName']) . ' ';
 
         return $query;
+    }
+
+    private function buildSqlQueryFromChart(&$dataObject)
+    {
+        $dataObject['sqlQuery'] .= ' FROM ' . $this->db->quoteIdentifier($dataObject['queryArray']['tableName']) . ' ';
     }
 
     /**
@@ -3119,6 +3132,15 @@ class AOR_Report extends Basic
         }
 
         return $query;
+    }
+
+    private function buildSqlQueryJoinChart(&$dataObject)
+    {
+        if (isset($dataObject['queryArray']['join'])) {
+            foreach ($dataObject['queryArray']['join'] as $join) {
+                $dataObject['sqlQuery'] .= $join;
+            }
+        }
     }
 
     /**
@@ -3140,6 +3162,19 @@ class AOR_Report extends Basic
         }
 
         return $query;
+    }
+
+
+    private function buildSqlQueryWhereChart(&$dataObject)
+    {
+        if (isset($dataObject['queryArray']['where'])) {
+            $query_where = '';
+            foreach ($dataObject['queryArray']['where'] as $where) {
+                $query_where .= ($query_where == '' ? 'WHERE ' : ' ') . $where;
+            }
+            $query_where = $this->queryWhereRepair($query_where);
+            $dataObject['sqlQuery'] .= ' ' . $query_where;
+        }
     }
 
     /**
@@ -3167,6 +3202,26 @@ class AOR_Report extends Basic
         return $query;
     }
 
+
+
+    private function buildSqlQueryGroupBy2Chart(&$dataObject)
+    {
+        if (isset($dataObject['queryArray']['group_by'])) {
+            $query_group_by = '';
+            foreach ($dataObject['queryArray']['group_by'] as $group_by) {
+                $query_group_by .= ($query_group_by == '' ? 'GROUP BY ' : ', ') . $group_by;
+            }
+            if (isset($dataObject['queryArray']['second_group_by']) && $query_group_by != '') {
+                foreach ($dataObject['queryArray']['second_group_by'] as $group_by) {
+                    $query_group_by .= ', ' . $group_by;
+                }
+            }
+            $dataObject['sqlQuery'] .= ' ' . $query_group_by;
+        }
+    }
+
+
+
     /**
      * @param $query_array
      * @param $query
@@ -3185,6 +3240,18 @@ class AOR_Report extends Basic
         }
 
         return $query;
+    }
+
+
+    private function buildSqlQuerySortByChart(&$dataObject)
+    {
+        if (isset($dataObject['queryArray']['sort_by'])) {
+            $query_sort_by = '';
+            foreach ($dataObject['queryArray']['sort_by'] as $sort_by) {
+                $query_sort_by .= ($query_sort_by == '' ? 'ORDER BY ' : ', ') . $sort_by;
+            }
+            $dataObject['sqlQuery'] .= ' ' . $query_sort_by;
+        }
     }
 
     /**

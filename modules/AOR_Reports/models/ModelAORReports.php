@@ -85,6 +85,40 @@ class ModelAORReports
     }
 
 
+    function requestToUserParameters($r)
+    {
+        $params = array();
+        if(isset($r['parameter_id']) && $r['parameter_id']) {
+            foreach ($r['parameter_id'] as $key => $parameterId) {
+                if ($r['parameter_type'][$key] === 'Multi') {
+                    $r['parameter_value'][$key] = encodeMultienumValue(explode(',', $r['parameter_value'][$key]));
+                }
+                $params[$parameterId] = array('id' => $parameterId,
+                    'operator' => $r['parameter_operator'][$key],
+                    'type' => $r['parameter_type'][$key],
+                    'value' => $r['parameter_value'][$key],
+                );
+
+                // Fix for issue #1272 - AOR_Report module cannot update Date type parameter.
+                if ($r['parameter_type'][$key] === 'Date') {
+                    $values = array();
+                    $values[] = $r['parameter_value'][0];
+                    $values[] = $r['parameter_value'][1];;
+                    $values[] = $r['parameter_value'][2];;
+                    $values[] = $r['parameter_value'][3];;
+
+                    $params[$parameterId] = array(
+                        'id' => $parameterId,
+                        'operator' => $r['parameter_operator'][$key],
+                        'type' => $r['parameter_type'][$key],
+                        'value' => $values,
+                    );
+                }
+            }
+        }
+        return $params;
+    }
+
 
 
     /**
