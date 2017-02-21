@@ -1028,47 +1028,15 @@ class AOR_Report extends Basic
         return $query_where;
     }
 
-
-    /**
-     * @param null $chartIds
-     * @param string $chartType
-     * @return string
-     */
     public function buildReportChart($chartIds = null, $chartType = self::CHART_TYPE_PCHART)
     {
-        global $beanList;
-
-        $ResultRowArray = $this->getResultRows();
-
-        $fields = $this->createLabels($ResultRowArray, $beanList);
-
-        $mainGroupField = $this->getMainGroupSet($ResultRowArray);
-
-
         global $beanList, $timedate, $app_list_strings, $sugar_config;
+        $moduleName = $this->report_module;
+        $ResultRowArray = $this->getResultRows();
+        $fields = $this->createLabels($ResultRowArray, $beanList);
+        $mainGroupField = $this->getMainGroupSet($ResultRowArray);
+        $bean = BeanFactory::getBean($moduleName);
 
-        try {
-            $query = $this->buildReportQueryChart($beanList, $timedate, $app_list_strings, $sugar_config);//this is where it needs to branch one report for normal queries and one for charts
-        } catch (Exception $e) {
-            echo 'Caught exception: ', $e->getMessage(), "\n";
-        }
-
-
-        $result2 = $this->db->query($query);
-        $data = $this->BuildDataRowsForChart($result2, $fields);
-
-        $fields = $this->getReportFields();
-
-        $html = $this->StartBuildChartHTML($chartIds, $chartType, $data, $fields, $mainGroupField);
-
-        return $html;
-    }
-
-
-
-
-    public function buildReportQueryChart($beanList, $timedate, $app_list_strings, $sugar_config, $extra = array())
-    {
         $dataObject = array(
             'reportId'=>null,
             'beanList'=>null,
@@ -1085,11 +1053,13 @@ class AOR_Report extends Basic
             'condition'=>null,
             'conditionFieldDefs'=>null,
         );
-        $query = '';
+
         $reportId = $this->id;
-        $model = new Model();
-        $moduleName = $this->report_module;
-        $queryDataArray = array();
+        $dataObject['reportId']=$reportId;
+        $dataObject['module'] = $bean;
+        $dataObject['queryArray'] = array();;
+        $dataObject['beanList'] = $beanList;
+        $dataObject['timeDate']= $timedate;
 
         $moduleBeanName = $beanList[$moduleName];
         if($moduleBeanName === null){
@@ -1100,17 +1070,31 @@ class AOR_Report extends Basic
             throw new Exception('AOR_Report:buildReportQueryChart: User Not Allowed Access To This Module', 101);
         }
 
-        $bean = new $beanList[$moduleName];
+        try {
+            $this->buildReportQueryChart($dataObject, $app_list_strings, $sugar_config);
+        } catch (Exception $e) {
+            echo 'Caught exception: ', $e->getMessage(), "\n";
+        }
 
-        $dataObject['reportId']=$reportId;
-        $dataObject['module'] = $bean;
-        $dataObject['queryArray'] = $queryDataArray;
-        $dataObject['beanList'] = $beanList;
-        $dataObject['timeDate']= $timedate;
+        $result2 = $this->db->query($dataObject['sqlQuery']);
+        $data = $this->BuildDataRowsForChart($result2, $fields);
 
+        $fields = $this->getReportFields();
+
+        $html = $this->StartBuildChartHTML($chartIds, $chartType, $data, $fields, $mainGroupField);
+
+        return $html;
+    }
+
+
+
+
+//    public function buildReportQueryChart($beanList, $timedate, $app_list_strings, $sugar_config, $extra = array())
+    public function buildReportQueryChart(&$dataObject, $app_list_strings, $sugar_config, $extra = array())
+    {
+        $model = new Model();
         $this->DataArrayGetTableData($dataObject);
         $this->buildQueryArraySelectForChart($dataObject, $model);
-
         try {
             $this->buildQueryArrayWhereForChart($dataObject, $app_list_strings, $sugar_config, $extra);
         } catch (Exception $e) {
@@ -1118,21 +1102,16 @@ class AOR_Report extends Basic
         }
 
         $query_array = $dataObject['queryArray'];
+        $query = $dataObject['sqlQuery'];
         $query = $this->buildSqlQuerySelect($query_array, $query);
-
         $query = $this->buildSqlQueryGroupBy($query_array, $query);
-
         $query = $this->buildSqlQueryFrom($query_array, $query);
-
         $query = $this->buildSqlQueryJoin($query_array, $query);
-
         $query = $this->buildSqlQueryWhere($query_array, $query);
-
         $query = $this->buildSqlQueryGroupBy2($query_array, $query);
-
         $query = $this->buildSqlQuerySortBy($query_array, $query);
 
-        return $query;
+        $dataObject['sqlQuery'] = $query;
 
     }
 
@@ -1261,9 +1240,7 @@ class AOR_Report extends Basic
         $relationshipExists = $parentModulebean->load_relationship($relationship);
         $relationshipLink = $parentModulebean->$relationship; /** @var $relationshipObj Link2 */
         $relationshipSide = $parentModulebean->$relationship->getSide();
-
         $relObj = $relationshipLink->getRelationshipObject();
-//        $test2 = get_class($test);/** @var  $test2 M2MRelationship */
 
         if($relationshipSide == 'LHS'){
             $relModuleSide = 'rhs_module';
@@ -1614,7 +1591,7 @@ class AOR_Report extends Basic
 //                    $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
 //                }
                 //setValueSuffix
-                $field = $this->setFieldTablesSuffixChart($dataObject);
+                $this->setFieldTablesSuffixChart($dataObject);
 
                 //check if its a custom field the set the field parameter
 //                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
@@ -1625,26 +1602,26 @@ class AOR_Report extends Basic
                 //check for custom selectable parameter from report
                 $this->buildConditionUserParamsChart($dataObject);
 
-                $conditionType = $condition->value_type;
+
                 //what type of condition is it?
                 list(
                     $condition,
                     $dataObject['queryArray'],
                     $value,
-                    $field,
+                    $conditionField,
                     $where_set
                     ) = $this->buildQueryForConditionTypeChart(
-                    $dataObject['queryArray'],
-                            $conditionType,
+                            $dataObject['queryArray'],
+                            $dataObject['condition']->value_type,
                             $dataObject['module'],
-                            $condition,
-                            $beanList,
+                            $dataObject['condition'],
+                            $dataObject['beanList'],
                             $dataObject['oldAlias'],
-                            $path,
+                            unserialize(base64_decode($dataObject['field']->module_path)),
                             $relationship,
                             $dataObject['tableAlias'],
                             $sugar_config,
-                            $field,
+                            $dataObject['queryArray']['conditionFields'][0],
                             $app_list_strings,
                             $aor_sql_operator_list,
                             $tiltLogicOp
@@ -1655,11 +1632,11 @@ class AOR_Report extends Basic
                 $value = $this->handleLikeConditions($conditionOperator, $value);
 
                 if ($condition->value_type == 'Value' && !$condition->value && $condition->operator == 'Equal_To') {
-                    $value = "{$value} OR {$field} IS NULL";
+                    $value = "{$value} OR {$conditionField} IS NULL";
                 }
 
                 $dataObject['queryArray'] = $this->whereNotSet($dataObject['queryArray'], $where_set, $condition,
-                    $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $field, $value);
+                    $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $conditionField, $value);
 
                 $tiltLogicOp = false;
             } else {
@@ -2354,7 +2331,7 @@ class AOR_Report extends Basic
      * @param $condition_module
      * @param $oldAlias
      * @param $path
-     * @param $rel
+     * @param $relationship
      * @param $condition
      * @param $table_alias
      * @return array
@@ -2366,7 +2343,7 @@ class AOR_Report extends Basic
         $condition_module,
         $oldAlias,
         $path,
-        $rel,
+        $relationship,
         $condition,
         $table_alias
     ) {
@@ -2380,7 +2357,7 @@ class AOR_Report extends Basic
 
             // Debugging: security groups conditions - It's a hack to just get the query working
             if ($condition_module->module_dir = 'SecurityGroups' && count($path) > 1) {
-                $table_alias = $oldAlias . ':' . $rel;
+                $table_alias = $oldAlias . ':' . $relationship;
             }
             $condition->field = 'id';
 
@@ -2466,12 +2443,14 @@ class AOR_Report extends Basic
             $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
             if ($isCustomField) {
                 $value = $tableName . $suffix . '.' . $fieldName;
-                return $value;
             }
+        }else{
+            $value = ($tableAlias ? "`$tableAlias`" : $tableName) . '.' . $fieldName;
         }
 
-        $value = ($tableAlias ? "`$tableAlias`" : $tableName) . '.' . $fieldName;
-        return $value;
+        $conditionsFields = array();
+        array_push($conditionsFields,$value);
+        $dataObject['queryArray']['conditionFields'] = $conditionsFields;
     }
 
     /**
@@ -2810,7 +2789,7 @@ class AOR_Report extends Basic
      * @param $beanList
      * @param $oldAlias
      * @param $path
-     * @param $rel
+     * @param $relationship
      * @param $table_alias
      * @param $sugar_config
      * @param $field
@@ -2828,7 +2807,7 @@ class AOR_Report extends Basic
         $beanList,
         $oldAlias,
         $path,
-        $rel,
+        $relationship,
         $table_alias,
         $sugar_config,
         $field,
@@ -2848,7 +2827,7 @@ class AOR_Report extends Basic
                         break;
                     case 'link':
                         list($table_alias, $query, $condition_module) = $this->primeDataForLink($query,
-                            $data, $beanList, $condition_module, $oldAlias, $path, $rel, $condition,
+                            $data, $beanList, $condition_module, $oldAlias, $path, $relationship, $condition,
                             $table_alias);
                         break;
                 }
@@ -3063,7 +3042,7 @@ class AOR_Report extends Basic
 
     private function checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)
     {
-        $bean = $dataObject['bean'];
+        $bean = $dataObject['module'];
         $beanList = $dataObject['beanList'];
         $isAllowed = true;
         foreach ($rowArray as $row) {
