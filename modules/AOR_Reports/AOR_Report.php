@@ -1052,6 +1052,8 @@ class AOR_Report extends Basic
             'selectField'=>null,
             'condition'=>null,
             'conditionFieldDefs'=>null,
+            'tiltLogicOperator'=>true,
+            'allowedOperatorList'=>$this->getAllowedOperatorList(),
         );
 
         $reportId = $this->id;
@@ -1119,12 +1121,10 @@ class AOR_Report extends Basic
 
     public function buildQueryArraySelectForChart(&$dataObject, Model $model)
     {
-        $bean = $dataObject['module'];
-        $reportId = $dataObject['reportId'];
 
         try {
 
-            $rowArray = $model->getChartDataArrayForSelect($reportId,$bean);
+            $rowArray = $model->getChartDataArrayForSelect($dataObject['reportId'],$dataObject['module']);
             $i = 0;
             foreach($rowArray as $row){
                 //getField($id)
@@ -1546,10 +1546,7 @@ class AOR_Report extends Basic
 
     public function buildQueryArrayWhereForChart(&$dataObject, $model, $app_list_strings, $sugar_config,  $extra = array())
     {
-        $beanList = $dataObject['beanList'];
-
-        $aor_sql_operator_list = $this->getAllowedOperatorList();
-        $tiltLogicOp = true;
+        $allowedSqlOperators = $dataObject['allowedOperatorList'];
 
         if (isset($extra['where']) && $extra['where']) {
             $query_array['where'][] = implode(' AND ', $extra['where']) . ' AND ';
@@ -1582,26 +1579,13 @@ class AOR_Report extends Basic
                 }
             }
 
-            //check if condition is in the allowed operator list
-            if (isset($aor_sql_operator_list[$condition->operator])) {
-//                $conditionFieldDefs = $dataObject['module']->field_defs[$condition->field];
-//                $tableName = $dataObject['tableAlias'];
-//                $dataSourceIsSet = isset($conditionFieldDefs['source']);
-//                if ($dataSourceIsSet) {
-//                    $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
-//                }
-                //setValueSuffix
+            $isSqlOperatorAllowed = isset($dataObject['allowedOperatorList'][$condition->operator]);
+            if ($isSqlOperatorAllowed) {
                 $this->setFieldTablesSuffixChart($dataObject);
 
-                //check if its a custom field the set the field parameter
-//                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
-
-                //buildJoinQueryForCustomFields
                 $this->buildJoinQueryForCustomFieldsChart($dataObject);
 
-                //check for custom selectable parameter from report
                 $this->buildConditionUserParamsChart($dataObject);
-
 
                 //what type of condition is it?
                 list(
@@ -1623,8 +1607,8 @@ class AOR_Report extends Basic
                             $sugar_config,
                             $dataObject['queryArray']['conditionFields'][0],
                             $app_list_strings,
-                            $aor_sql_operator_list,
-                            $tiltLogicOp
+                    $dataObject['allowedOperatorList'],
+                    $dataObject['tiltLogicOperator']
                 );
 
                 //handle like conditions
@@ -1636,17 +1620,17 @@ class AOR_Report extends Basic
                 }
 
                 $dataObject['queryArray'] = $this->whereNotSet($dataObject['queryArray'], $where_set, $condition,
-                    $app_list_strings, $tiltLogicOp, $aor_sql_operator_list, $conditionField, $value);
+                    $app_list_strings, $dataObject['tiltLogicOperator'], $dataObject['allowedOperatorList'], $conditionField, $value);
 
-                $tiltLogicOp = false;
+                $dataObject['tiltLogicOperator'] = false;
             } else {
                 if ($condition->parenthesis) {
                     if ($condition->parenthesis == 'START') {
-                        $dataObject['queryArray']['where'][] = ($tiltLogicOp ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
-                        $tiltLogicOp = true;
+                        $dataObject['queryArray']['where'][] = ($dataObject['tiltLogicOperator'] ? '' : ($condition->logic_op ? $condition->logic_op . ' ' : 'AND ')) . '(';
+                        $dataObject['tiltLogicOperator'] = true;
                     } else {
                         $dataObject['queryArray']['where'][] = ')';
-                        $tiltLogicOp = false;
+                        $dataObject['tiltLogicOperator'] = false;
                     }
                 } else {
                     $GLOBALS['log']->debug('illegal condition');
