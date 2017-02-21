@@ -1109,9 +1109,6 @@ class AOR_Report extends Basic
         $dataObject['timeDate']= $timedate;
 
         $this->DataArrayGetTableData($dataObject);
-
-
-
         $this->buildQueryArraySelectForChart($dataObject, $model);
 
         try {
@@ -1610,23 +1607,20 @@ class AOR_Report extends Basic
 
             //check if condition is in the allowed operator list
             if (isset($aor_sql_operator_list[$condition->operator])) {
-
-                $conditionFieldDefs = $dataObject['module']->field_defs[$condition->field];
-                $tableName = $dataObject['tableAlias'];
-                $fieldName = $condition->field;
-                $dataSourceIsSet = isset($conditionFieldDefs['source']);
-                if ($dataSourceIsSet) {
-                    $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
-                }
+//                $conditionFieldDefs = $dataObject['module']->field_defs[$condition->field];
+//                $tableName = $dataObject['tableAlias'];
+//                $dataSourceIsSet = isset($conditionFieldDefs['source']);
+//                if ($dataSourceIsSet) {
+//                    $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
+//                }
                 //setValueSuffix
-                $field = $this->setFieldTablesSuffixChart($isCustomField, $tableName, $dataObject['tableAlias'], $fieldName);
+                $field = $this->setFieldTablesSuffixChart($dataObject);
 
                 //check if its a custom field the set the field parameter
 //                    $field = $this->setFieldSuffixOld($data, $table_alias, $condition);
 
                 //buildJoinQueryForCustomFields
-                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $dataObject['tableAlias'], $tableName,
-                    $dataObject['module']);
+                $this->buildJoinQueryForCustomFieldsChart($dataObject);
 
                 //check for custom selectable parameter from report
                 $this->buildConditionParams($condition);
@@ -2459,23 +2453,25 @@ class AOR_Report extends Basic
     }
 
 
-    private function setFieldTablesSuffixChart(
-        $isCustomField,
-        $tableName,
-        $tableAlias,
-        $fieldName,
-        $suffix = '_cstm'
-    ) {
+    private function setFieldTablesSuffixChart(&$dataObject){
+        $suffix = '_cstm';
+        $tableName = $dataObject['tableAlias'];
+        $tableAlias = $tableName;
+        $fieldName = $dataObject['condition']->field;
+        $tableName = $dataObject['tableAlias'];
 
-        if ($isCustomField) {
-            $value = $tableName . $suffix . '.' . $fieldName;
-
-            return $value;
-        } else {
-            $value = ($tableAlias ? "`$tableAlias`" : $tableName) . '.' . $fieldName;
-
-            return $value;
+        $conditionFieldDefs = $dataObject['module']->field_defs[$fieldName];
+        $dataSourceIsSet = isset($conditionFieldDefs['source']);
+        if ($dataSourceIsSet) {
+            $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
+            if ($isCustomField) {
+                $value = $tableName . $suffix . '.' . $fieldName;
+                return $value;
+            }
         }
+
+        $value = ($tableAlias ? "`$tableAlias`" : $tableName) . '.' . $fieldName;
+        return $value;
     }
 
     /**
@@ -2523,6 +2519,35 @@ class AOR_Report extends Basic
 
         return $query;
     }
+
+
+    private function buildJoinQueryForCustomFieldsChart(&$dataObject) {
+
+        $query = $dataObject['queryArray'];
+        $table_alias = $dataObject['tableAlias'];
+        $tableName = $dataObject['tableAlias'];
+        $condition_module = $dataObject['module'];
+        $fieldName = $dataObject['condition']->field;
+
+        $conditionFieldDefs = $dataObject['module']->field_defs[$fieldName];
+        $dataSourceIsSet = isset($conditionFieldDefs['source']);
+        if ($dataSourceIsSet) {
+            $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
+            if ($isCustomField) {
+                $query = $this->buildReportQueryJoin(
+                $tableName . '_cstm',
+                $table_alias . '_cstm',
+                $table_alias,
+                $condition_module,
+                'custom',
+                $query);
+            }
+
+        }
+        $dataObject['queryArray'] =  $query;
+    }
+
+
 
     /**
      * @param $firstParam
