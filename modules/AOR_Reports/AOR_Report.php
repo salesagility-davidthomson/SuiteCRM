@@ -1108,7 +1108,7 @@ class AOR_Report extends Basic
         $dataObject['beanList'] = $beanList;
         $dataObject['timeDate']= $timedate;
 
-        $this->DataArrayGetTableData($queryDataArray, $bean);
+        $this->DataArrayGetTableData($dataObject);
 
 
 
