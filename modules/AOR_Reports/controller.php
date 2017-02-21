@@ -662,11 +662,18 @@ class AOR_ReportsController extends SugarController {
     protected function action_DetailView(){
         $this->view = 'detail';
         $model = new Model();
+        $bean = $this->bean;
+//
+//        if(!empty($bean->id)){
+//            $bean->user_parameters = requestToUserParameters();
+//        }
+
 //        global $beanList;
 //        $chartReport = $model->buildReportChart($this->bean, $beanList, null, AOR_Report::CHART_TYPE_RGRAPH);
 //        die('here');
 
         $reportParams =$model->getReportParameters($this->bean);
+        $bean->reportParameters = $reportParams;
         $this->view_object_map['reportParams'] =$reportParams;
 
 //        $reportHTML = $this->bean->buildMultiGroupReport(0,true);

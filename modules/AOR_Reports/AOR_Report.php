@@ -1623,7 +1623,7 @@ class AOR_Report extends Basic
                 $this->buildJoinQueryForCustomFieldsChart($dataObject);
 
                 //check for custom selectable parameter from report
-                $this->buildConditionParamsChart($dataObject);
+                $this->buildConditionUserParamsChart($dataObject);
 
                 $conditionType = $condition->value_type;
                 //what type of condition is it?
@@ -2489,12 +2489,12 @@ class AOR_Report extends Basic
     }
 
 
-    private function buildConditionParamsChart(&$dataObject) {
+    private function buildConditionUserParamsChart(&$dataObject) {
         $condition = $dataObject['condition'];
-        $params = $this->user_parameters;
+        $params = $this->reportParameters;
         if (!empty($params[$condition->id])) {
             if ($condition->parameter) {
-                $condParam = $this->user_parameters[$condition->id];
+                $condParam = $params[$condition->id];
                 $condition->value = $condParam['value'];
                 $condition->operator = $condParam['operator'];
                 $condition->value_type = $condParam['type'];
