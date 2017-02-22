@@ -1058,7 +1058,7 @@ class AOR_Report extends Basic
 
         $reportId = $this->id;
         $dataObject['reportId']=$reportId;
-        $dataObject['module'] = $bean;
+        $dataObject['reportModuleBean'] = $bean;
         $dataObject['queryArray'] = array();;
         $dataObject['beanList'] = $beanList;
         $dataObject['timeDate']= $timedate;
@@ -1115,7 +1115,7 @@ class AOR_Report extends Basic
 
         try {
 
-            $rowArray = $model->getChartDataArrayForSelect($dataObject['reportId'],$dataObject['module']);
+            $rowArray = $model->getChartDataArrayForSelect($dataObject['reportId'],$dataObject['reportModuleBean']);
             $i = 0;
             foreach($rowArray as $row){
                 //getField($id)
@@ -1123,8 +1123,8 @@ class AOR_Report extends Basic
                 $field->retrieve($row['id']);
                 $field->label = str_replace(' ', '_', $field->label) . $i;
                 $dataObject['field'] = $field;
-                $dataObject['tableAlias'] = $dataObject['module']->table_name;
-                $dataObject['oldAlias'] = $dataObject['tableAlias'];// why set this now?
+                $dataObject['tableAlias'] = $dataObject['reportModuleBean']->table_name;
+//                $dataObject['oldAlias'] = $dataObject['tableAlias'];// why set this now?
 
                 $this->createQueryDataArrayChart($dataObject);
                 ++$i;
@@ -1227,7 +1227,7 @@ class AOR_Report extends Basic
 
 
         $query = $dataObject['queryArray'];
-        $parentModulebean = $dataObject['module']; /**  @var $parentModulebean SugarBean */
+        $parentModulebean = $dataObject['reportModuleBean']; /**  @var $parentModulebean SugarBean */
         $relationshipExists = $parentModulebean->load_relationship($relationship);
         $relationshipLink = $parentModulebean->$relationship; /** @var $relationshipObj Link2 */
         $relationshipSide = $parentModulebean->$relationship->getSide();
@@ -1543,11 +1543,11 @@ class AOR_Report extends Basic
             $closure = true;
         }
 
-        $rowArray = $model->getChartDataArray2($dataObject['reportId'], $dataObject['module']);
+        $rowArray = $model->getChartDataArray2($dataObject['reportId'], $dataObject['reportModuleBean']);
 
         //checkIfUserIsAllowAccessToModule
         if (!$this->checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)) {
-            throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$dataObject['module'], 102);
+            throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$dataObject['reportModuleBean'], 102);
         }
 
         //build where statement
@@ -1557,7 +1557,7 @@ class AOR_Report extends Basic
             $dataObject['condition'] = $condition;
             $path = unserialize(base64_decode($dataObject['field']->module_path));
             $pathExists = !empty($path[0]);
-            $PathIsNotModuleDir = $path[0] != $dataObject['module']->module_dir;
+            $PathIsNotModuleDir = $path[0] != $dataObject['reportModuleBean']->module_dir;
             if ($pathExists && $PathIsNotModuleDir) {
                 foreach ($path as $relationship) {
                     $this->buildReportQueryJoinChart($dataObject,$relationship,'relationship');
@@ -1627,8 +1627,8 @@ class AOR_Report extends Basic
             array_unshift($queryArray['where'], '(');
             $queryArray['where'][] = ') AND ';
         }
-        $queryArray['where'][] = $dataObject['module']->table_name . ".deleted = 0 " . $this->build_report_access_query($dataObject['module'],
-                $dataObject['module']->table_name);
+        $queryArray['where'][] = $dataObject['reportModuleBean']->table_name . ".deleted = 0 " . $this->build_report_access_query($dataObject['reportModuleBean'],
+                $dataObject['reportModuleBean']->table_name);
 
 
 
@@ -1777,11 +1777,7 @@ class AOR_Report extends Basic
         return $data;
     }
 
-    /**
-     * @param $field_module
-     * @param $field
-     * @return mixed
-     */
+
     private function BuildDataForRelateTypeChart(&$dataObject) {
         $field = $dataObject['field'];
         $field_module = $dataObject['fieldModule'];
@@ -2220,7 +2216,7 @@ class AOR_Report extends Basic
         // --- sql query building
         $path = unserialize(base64_decode($dataObject['field']->module_path));
         $pathExists = !empty($path[0]);
-        $PathIsNotModuleDir = $path[0] != $dataObject['module']->module_dir;
+        $PathIsNotModuleDir = $path[0] != $dataObject['reportModuleBean']->module_dir;
         if ($pathExists && $PathIsNotModuleDir) {
             foreach ($path as $relationship) {
                 $this->buildReportQueryJoinChart($dataObject,$relationship,'relationship');
@@ -2283,7 +2279,7 @@ class AOR_Report extends Basic
         $conditionFieldDefs = $dataObject['conditionFieldDefs'];
         if (isset($conditionFieldDefs['id_name'])) {
             $condition->field = $conditionFieldDefs['id_name'];
-            $data_new = $dataObject['module']->field_defs[$condition->field];
+            $data_new = $dataObject['reportModuleBean']->field_defs[$condition->field];
             if (!empty($data_new['source']) && $data_new['source'] == 'non-db' && $data_new['type'] != 'link' && isset($conditionFieldDefs['link'])) {
                 $data_new['type'] = 'link';
                 $data_new['relationship'] = $conditionFieldDefs['link'];
@@ -2405,7 +2401,7 @@ class AOR_Report extends Basic
         $fieldName = $dataObject['condition']->field;
         $tableName = $dataObject['tableAlias'];
 
-        $conditionFieldDefs = $dataObject['module']->field_defs[$fieldName];
+        $conditionFieldDefs = $dataObject['reportModuleBean']->field_defs[$fieldName];
         $dataSourceIsSet = isset($conditionFieldDefs['source']);
         if ($dataSourceIsSet) {
             $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
@@ -2487,10 +2483,10 @@ class AOR_Report extends Basic
         $query = $dataObject['queryArray'];
         $table_alias = $dataObject['tableAlias'];
         $tableName = $dataObject['tableAlias'];
-        $condition_module = $dataObject['module'];
+        $condition_module = $dataObject['reportModuleBean'];
         $fieldName = $dataObject['condition']->field;
 
-        $conditionFieldDefs = $dataObject['module']->field_defs[$fieldName];
+        $conditionFieldDefs = $dataObject['reportModuleBean']->field_defs[$fieldName];
         $dataSourceIsSet = isset($conditionFieldDefs['source']);
         if ($dataSourceIsSet) {
             $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
@@ -2759,22 +2755,22 @@ class AOR_Report extends Basic
         switch ($dataObject['condition']->value_type) {
             case 'Field': // is it a specific field
                 //processWhereConditionForTypeField
-                $data = $dataObject['module']->field_defs[$dataObject['condition']->value];
+                $data = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->value];
 
                 switch ($data['type']) {
                     case 'relate':
                         list($data, $dataObject['condition']) = $this->primeDataForRelate($data, $dataObject['condition'],
-                            $dataObject['module']);
+                            $dataObject['reportModuleBean']);
                         break;
                     case 'link':
-                        list($table_alias, $dataObject['queryArray'], $dataObject['module']) = $this->primeDataForLink($dataObject['queryArray'],
-                            $data, $dataObject['beanList'], $dataObject['module'], $dataObject['oldAlias'], $path, $relationship, $dataObject['condition'],
+                        list($table_alias, $dataObject['queryArray'], $dataObject['reportModuleBean']) = $this->primeDataForLink($dataObject['queryArray'],
+                            $data, $dataObject['beanList'], $dataObject['reportModuleBean'], $dataObject['oldAlias'], $path, $relationship, $dataObject['condition'],
                             $table_alias);
                         break;
                 }
 
 
-                $tableName = $dataObject['module']->table_name;
+                $tableName = $dataObject['reportModuleBean']->table_name;
                 $fieldName = $dataObject['condition']->value;
                 $dataSourceIsSet = isset($data['source']);
                 if ($dataSourceIsSet) {
@@ -2785,7 +2781,7 @@ class AOR_Report extends Basic
                 $value = $this->setFieldTablesSuffix($isCustomField, $tableName, $table_alias, $fieldName);
                 $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $table_alias,
                     $tableName,
-                    $dataObject['module']);
+                    $dataObject['reportModuleBean']);
                 break;
 
             case 'Date': //is it a date
@@ -2803,7 +2799,7 @@ class AOR_Report extends Basic
                     $sugar_config,
                     $field,
                     $dataObject['queryArray'],
-                    $dataObject['module']);
+                    $dataObject['reportModuleBean']);
 
                 $secondParam = $params[1];
                 $thirdParam = $params[2];
@@ -2983,7 +2979,7 @@ class AOR_Report extends Basic
 
     private function checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)
     {
-        $bean = $dataObject['module'];
+        $bean = $dataObject['reportModuleBean'];
         $beanList = $dataObject['beanList'];
         $isAllowed = true;
         foreach ($rowArray as $row) {
@@ -3318,7 +3314,7 @@ class AOR_Report extends Basic
     private function DataArrayGetTableData(&$dataObject)
     {
 
-        $bean = $dataObject['module'];
+        $bean = $dataObject['reportModuleBean'];
         $queryDataArray['tableName'] = $bean->table_name;
         $queryDataArray['id_select'][$bean->table_name] = $bean->db->quoteIdentifier($bean->table_name) . ".id AS '" . $bean->table_name . "_id'";
         $queryDataArray['id_select_group'][$bean->table_name] = $bean->db->quoteIdentifier($bean->table_name) . ".id";
