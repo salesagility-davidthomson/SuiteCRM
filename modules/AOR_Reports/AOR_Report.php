@@ -1123,7 +1123,7 @@ class AOR_Report extends Basic
                 $field->retrieve($row['id']);
                 $field->label = str_replace(' ', '_', $field->label) . $i;
                 $dataObject['field'] = $field;
-                $dataObject['tableAlias'] = $dataObject['reportModuleBean']->table_name;
+                $dataObject['tableAlias'] = $dataObject['reportModuleBean']->table_name;// why set this now?
 //                $dataObject['oldAlias'] = $dataObject['tableAlias'];// why set this now?
 
                 $this->createQueryDataArrayChart($dataObject);
@@ -1225,12 +1225,9 @@ class AOR_Report extends Basic
 
     public function buildReportQueryJoinChart(&$dataObject, $relationship, $type = 'relationship') {
 
-
-        $query = $dataObject['queryArray'];
-        $parentModulebean = $dataObject['reportModuleBean']; /**  @var $parentModulebean SugarBean */
-        $relationshipExists = $parentModulebean->load_relationship($relationship);
-        $relationshipLink = $parentModulebean->$relationship; /** @var $relationshipObj Link2 */
-        $relationshipSide = $parentModulebean->$relationship->getSide();
+        $relationshipExists = $dataObject['reportModuleBean']->load_relationship($relationship);
+        $relationshipLink = $dataObject['reportModuleBean']->$relationship; /** @var $relationshipObj Link2 */
+        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
         $relObj = $relationshipLink->getRelationshipObject();
 
         if($relationshipSide == 'LHS'){
@@ -1239,51 +1236,48 @@ class AOR_Report extends Basic
             $relModuleSide = 'lhs_module';
         }
         $relatedModuleName = $relObj->def[$relModuleSide];
-
-        $relatedModuleBean = BeanFactory::getBean($relatedModuleName);
-
-        $dataObject['fieldModule'] = $relatedModuleBean;//TODO: rename fieldModule to relatedModule
-        $tableAlias  = $relatedModuleBean->table_name;
-        $parentAlias = $parentModulebean->table_name;
+        $dataObject['relatedModuleBean'] = BeanFactory::getBean($relatedModuleName);
+        $tableAlias  = $dataObject['relatedModuleBean']->table_name;
+        $parentAlias = $dataObject['reportModuleBean']->table_name;
         $tableAlias = $tableAlias . ":" . $tableAlias;
 
-        if (!isset($query['join'][$tableAlias])) {
-
+        $joinNotSet = !isset($dataObject['queryArray']['join'][$tableAlias]);
+        if ($joinNotSet) {
             switch ($type) {
                 case 'custom':
-                    $query['join'][$tableAlias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($parentModulebean->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($relationship) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($relationship) . '.id_c ';
+                    $dataObject['queryArray']['join'][$tableAlias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($dataObject['reportModuleBean']->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($relationship) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($relationship) . '.id_c ';
                     break;
 
                 case 'relationship':
                     if ($relationshipExists) {
                         $params['join_type'] = 'LEFT JOIN';
-                        $isOneToMany = $parentModulebean->$relationship->relationship_type != 'one-to-many';
+                        $isOneToMany = $dataObject['reportModuleBean']->$relationship->relationship_type != 'one-to-many';
                         if ($isOneToMany) {
                             $RelationshipIsLeftHandSide = $relationshipSide == REL_LHS;
                             if ($RelationshipIsLeftHandSide) {
-                                $params['right_join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
-                                $params['join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
-                                $params['left_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
+                                $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
+                                $params['join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
+                                $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
                             } else {
-                                $params['right_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
-                                $params['join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
-                                $params['left_join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
+                                $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
+                                $params['join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
+                                $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
                             }
 
                         } else {
-                            $params['right_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
-                            $params['join_table_alias'] = $this->db->quoteIdentifier($tableAlias);
-                            $params['left_join_table_alias'] = $this->db->quoteIdentifier($parentAlias);
+                            $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
+                            $params['join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
+                            $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
                         }
                         $linkAlias = $parentAlias . "|" . $tableAlias;
                         $params['join_table_link_alias'] = $this->db->quoteIdentifier($linkAlias);
-                        $join = $parentModulebean->$relationship->getJoin($params, true);
-                        $query['join'][$tableAlias] = $join['join'];
-                        if ($relatedModuleBean != null) {
-                            $query['join'][$tableAlias] .= $this->build_report_access_query($relatedModuleBean, $relationship);
+                        $join = $dataObject['reportModuleBean']->$relationship->getJoin($params, true);
+                        $dataObject['queryArray']['join'][$tableAlias] = $join['join'];
+                        if ($dataObject['relatedModuleBean'] != null) {
+                            $dataObject['queryArray']['join'][$tableAlias] .= $this->build_report_access_query($dataObject['relatedModuleBean'], $relationship);
                         }
-                        $query['id_select'][$tableAlias] = $join['select'] . " AS '" . $tableAlias . "_id'";
-                        $query['id_select_group'][$tableAlias] = $join['select'];
+                        $dataObject['queryArray']['id_select'][$tableAlias] = $join['select'] . " AS '" . $tableAlias . "_id'";
+                        $dataObject['queryArray']['id_select_group'][$tableAlias] = $join['select'];
                     }
                     break;
                 default:
@@ -1292,9 +1286,6 @@ class AOR_Report extends Basic
             }
 
         }
-
-        $dataObject['queryArray'] = $query;
-        $dataObject['fieldModule'] = $relatedModuleBean;
     }
 
 
@@ -1777,10 +1768,15 @@ class AOR_Report extends Basic
         return $data;
     }
 
+    //TODO: This whole function needs to be checked before use
+    private function BuildDataForRelationshipChart(&$dataObject,$relationship) {
+        $reportModulebean = $dataObject['reportModuleBean']; /**  @var $reportModulebean SugarBean */
+        $relationshipLink = $reportModulebean->$relationship; /** @var $relationshipLink Link2 */
+        $relObj = $relationshipLink->getRelationshipObject();
 
-    private function BuildDataForRelateTypeChart(&$dataObject) {
+
         $field = $dataObject['field'];
-        $field_module = $dataObject['fieldModule'];
+        $field_module = $relObj;
         $dataArray = $field_module->field_defs[$field->field];
         if ($dataArray['type'] == 'relate' && isset($dataArray['id_name'])) {
             $field->field = $dataArray['id_name'];
@@ -1840,27 +1836,26 @@ class AOR_Report extends Basic
      * @return array
      */
     private function BuildDataForLinkTypeChart(&$dataObject) {
-
-        $queryArray = $dataObject['queryArray'];
-        $dataArray = $dataObject['dataArray'];
         $beanList = $dataObject['beanList'];
-        $field_module = $dataObject['fieldModule'];
-        $oldAlias = $dataObject['oldAlias'];
-        $field = $dataObject['field'];
-        $table_alias = $dataObject['tableAlias'];
-        if ($dataArray['type'] == 'link' && $dataArray['source'] == 'non-db') {
-            $new_field_module = new $beanList[getRelatedModule($field_module->module_dir,
-                $dataArray['relationship'])];
-            $table_alias = $dataArray['relationship'];
-            $queryArray = $this->buildReportQueryJoin($dataArray['relationship'], $table_alias, $oldAlias,
-                $field_module, 'relationship', $queryArray, $new_field_module);
-            $field_module = $new_field_module;
-            $field->field = 'id';
 
-            return array($table_alias, $queryArray, $field_module);
+        if ($dataObject['dataArray']['type'] == 'link' && $dataObject['dataArray']['source'] == 'non-db') {
+            $new_field_module = new $beanList[getRelatedModule(
+                $dataObject['relatedModuleBean']->module_dir,
+                $dataObject['dataArray']['relationship']
+            )];
+            $table_alias = $dataObject['dataArray']['relationship'];
+            $dataObject['queryArray'] = $this->buildReportQueryJoin(
+                $dataObject['dataArray']['relationship'],
+                $table_alias,
+                $dataObject['oldAlias'],
+                $dataObject['relatedModuleBean'],
+                'relationship',
+                $dataObject['queryArray'],
+                $new_field_module
+            );
+            $dataObject['field']->field = 'id';
         }
 
-        return array($table_alias, $queryArray, $field_module);
     }
 
 
@@ -1907,7 +1902,7 @@ class AOR_Report extends Basic
 
         $queryArray = $dataObject['queryArray'];
         $dataArray = $dataObject['dataArray'];
-        $field_module = $dataObject['fieldModule'];
+        $field_module = $dataObject['relatedModuleBean'];
         $table_alias = $dataObject['tableAlias'];
         
         if ($dataArray['type'] == 'currency' && isset($field_module->field_defs['currency_id'])) {
@@ -1971,7 +1966,7 @@ class AOR_Report extends Basic
         $dataArray = $dataObject['dataArray'];
         $table_alias = $dataObject['tableAlias'];
         $field = $dataObject['field'];
-        $field_module = $dataObject['fieldModule'];
+        $field_module = $dataObject['relatedModuleBean'];
         if ((isset($dataArray['source']) && $dataArray['source'] == 'custom_fields')) {
             $select_field = $this->db->quoteIdentifier($table_alias . '_cstm') . '.' . $field->field;
             $queryArray = $this->buildReportQueryJoin($table_alias . '_cstm', $table_alias . '_cstm',
@@ -1980,7 +1975,7 @@ class AOR_Report extends Basic
             $select_field = $this->db->quoteIdentifier($table_alias) . '.' . $field->field;
         }
 
-        $dataObject['selectField'] = $select_field;
+        $dataObject['selectField'] = $select_field;//TODO: investigate why select field is not in queryArray
         $dataObject['queryArray'] = $queryArray;
 
     }
@@ -2065,17 +2060,15 @@ class AOR_Report extends Basic
      * @return mixed
      */
     private function SetTableAliasChart(&$dataObject) {
-        $queryArray = $dataObject['queryArray'];
         $field = $dataObject['field'];
-        $table_alias =$dataObject['tableAlias'];
-        if ($field->link && isset($queryArray['id_select'][$table_alias])) {
+        $table_alias = $dataObject['tableAlias'];
+        $isFieldLinkSet = ($field->link==0)?false:true;
+        $isTablePartOfSelection = isset($queryArray['id_select'][$table_alias]);
+        if ($isFieldLinkSet && $isTablePartOfSelection) {
             $queryArray['select'][] = $queryArray['id_select'][$table_alias];
             $queryArray['second_group_by'][] = $queryArray['id_select_group'][$table_alias];
             unset($queryArray['id_select'][$table_alias]);
-
-
         }
-        $dataObject['queryArray'] = $queryArray;
     }
 
     /**
@@ -2213,7 +2206,6 @@ class AOR_Report extends Basic
 
 
     private function createQueryDataArrayChart(&$dataObject) {
-        // --- sql query building
         $path = unserialize(base64_decode($dataObject['field']->module_path));
         $pathExists = !empty($path[0]);
         $PathIsNotModuleDir = $path[0] != $dataObject['reportModuleBean']->module_dir;
@@ -2223,9 +2215,11 @@ class AOR_Report extends Basic
             }
 
         }
-        // --- sql query building
-        // --- data queryArray building
-        $this->BuildDataForRelateTypeChart($dataObject);
+        if ($pathExists && $PathIsNotModuleDir) {
+            foreach ($path as $relationship) {
+                $this->BuildDataForRelationshipChart($dataObject,$relationship); //TODO: rename to BuildDataForRelationship should be inside for each relationship
+            }
+        }
         $this->BuildDataForLinkTypeChart($dataObject);
         $this->BuildDataForCurrencyTypeChart($dataObject);
         $this->BuildDataForCustomFieldChart($dataObject);
