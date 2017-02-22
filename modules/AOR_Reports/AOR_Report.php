@@ -1044,12 +1044,12 @@ class AOR_Report extends Basic
             'sqlQuery'=>null,
             'dataArray'=>null,
             'field'=>null,
-            'module'=>null,
-            'fieldModule'=>null,
+            'reportModuleBean'=>null,
+            'relatedModuleBean'=>null,
             'tableAlias'=>null,
             'oldAlias'=>null,
             'timeDate'=>null,
-            'selectField'=>null,
+            'currentFieldString'=>null,
             'condition'=>null,
             'conditionFieldDefs'=>null,
             'tiltLogicOperator'=>true,
@@ -1226,17 +1226,11 @@ class AOR_Report extends Basic
     public function buildReportQueryJoinChart(&$dataObject, $relationship, $type = 'relationship') {
 
         $relationshipExists = $dataObject['reportModuleBean']->load_relationship($relationship);
-        $relationshipLink = $dataObject['reportModuleBean']->$relationship; /** @var $relationshipObj Link2 */
-        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
-        $relObj = $relationshipLink->getRelationshipObject();
 
-        if($relationshipSide == 'LHS'){
-            $relModuleSide = 'rhs_module';
-        }else{
-            $relModuleSide = 'lhs_module';
-        }
-        $relatedModuleName = $relObj->def[$relModuleSide];
-        $dataObject['relatedModuleBean'] = BeanFactory::getBean($relatedModuleName);
+        $this->populateDataObjectWithRelatedModuleBean($dataObject, $relationship);
+
+        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
+
         $tableAlias  = $dataObject['relatedModuleBean']->table_name;
         $parentAlias = $dataObject['reportModuleBean']->table_name;
         $tableAlias = $tableAlias . ":" . $tableAlias;
@@ -1770,24 +1764,22 @@ class AOR_Report extends Basic
 
     //TODO: This whole function needs to be checked before use
     private function BuildDataForRelationshipChart(&$dataObject,$relationship) {
-        $reportModulebean = $dataObject['reportModuleBean']; /**  @var $reportModulebean SugarBean */
-        $relationshipLink = $reportModulebean->$relationship; /** @var $relationshipLink Link2 */
+
+        $this->populateDataObjectWithRelatedModuleBean($dataObject, $relationship);
+
+        $relationshipLink = $dataObject['reportModuleBean']->$relationship;/** @var $relationshipLink Link2 */
         $relObj = $relationshipLink->getRelationshipObject();
-
-
-        $field = $dataObject['field'];
         $field_module = $relObj;
-        $dataArray = $field_module->field_defs[$field->field];
-        if ($dataArray['type'] == 'relate' && isset($dataArray['id_name'])) {
-            $field->field = $dataArray['id_name'];
-            $dataArray_new = $field_module->field_defs[$field->field];
-            if (isset($dataArray_new['source']) && $dataArray_new['source'] == 'non-db' && $dataArray_new['type'] != 'link' && isset($dataArray['link'])) {
+        $dataObject['dataArray'] = $field_module->field_defs[$dataObject['field']->field];
+        if ($dataObject['dataArray']['type'] == 'relate' && isset($dataObject['dataArray']['id_name'])) {
+            $dataObject['field']->field = $dataObject['dataArray']['id_name'];
+            $dataArray_new = $field_module->field_defs[$dataObject['field']->field];
+            if (isset($dataArray_new['source']) && $dataArray_new['source'] == 'non-db' && $dataArray_new['type'] != 'link' && isset($dataObject['dataArray']['link'])) {
                 $dataArray_new['type'] = 'link';
-                $dataArray_new['relationship'] = $dataArray['link'];
+                $dataArray_new['relationship'] = $dataObject['dataArray']['link'];
             }
-            $dataArray = $dataArray_new;
+            $dataObject['dataArray'] = $dataArray_new; //TODO: investigate whether this should be overwriting dataArray
         }
-        $dataObject['dataArray'] = $dataArray;
     }
 
     /**
@@ -1891,35 +1883,16 @@ class AOR_Report extends Basic
 
 
 
-    /**
-     * @param $query
-     * @param $data
-     * @param $field_module
-     * @param $table_alias
-     * @return mixed
-     */
     private function BuildDataForCurrencyTypeChart(&$dataObject) {
-
-        $queryArray = $dataObject['queryArray'];
-        $dataArray = $dataObject['dataArray'];
-        $field_module = $dataObject['relatedModuleBean'];
-        $table_alias = $dataObject['tableAlias'];
-        
-        if ($dataArray['type'] == 'currency' && isset($field_module->field_defs['currency_id'])) {
-            if ((isset($field_module->field_defs['currency_id']['source']) && $field_module->field_defs['currency_id']['source'] == 'custom_fields')) {
-                $queryArray['select'][$table_alias . '_currency_id'] = $this->db->quoteIdentifier($table_alias . '_cstm') . ".currency_id AS '" . $table_alias . "_currency_id'";
-                $queryArray['second_group_by'][] = $this->db->quoteIdentifier($table_alias . '_cstm') . ".currency_id";
-
-                return $queryArray;
+        if ($dataObject['dataArray']['type'] == 'currency' && isset($dataObject['relatedModuleBean']->field_defs['currency_id'])) {
+            if ((isset($dataObject['relatedModuleBean']->field_defs['currency_id']['source']) && $dataObject['relatedModuleBean']->field_defs['currency_id']['source'] == 'custom_fields')) {
+                $dataObject['queryArray']['select'][$dataObject['tableAlias'] . '_currency_id'] = $this->db->quoteIdentifier($dataObject['tableAlias'] . '_cstm') . ".currency_id AS '" . $dataObject['tableAlias'] . "_currency_id'";
+                $dataObject['queryArray']['second_group_by'][] = $this->db->quoteIdentifier($dataObject['tableAlias'] . '_cstm') . ".currency_id";
             } else {
-                $queryArray['select'][$table_alias . '_currency_id'] = $this->db->quoteIdentifier($table_alias) . ".currency_id AS '" . $table_alias . "_currency_id'";
-                $queryArray['second_group_by'][] = $this->db->quoteIdentifier($table_alias) . ".currency_id";
-
-
+                $dataObject['queryArray']['select'][$dataObject['tableAlias'] . '_currency_id'] = $this->db->quoteIdentifier($dataObject['tableAlias']) . ".currency_id AS '" . $dataObject['tableAlias'] . "_currency_id'";
+                $dataObject['queryArray']['second_group_by'][] = $this->db->quoteIdentifier($dataObject['tableAlias']) . ".currency_id";
             }
         }
-        $dataObject['queryArray']=$queryArray;
-
     }
 
     /**
@@ -1961,23 +1934,9 @@ class AOR_Report extends Basic
      * @return array
      */
     private function BuildDataForCustomFieldChart(&$dataObject) {
-
-        $queryArray = $dataObject['queryArray'];
-        $dataArray = $dataObject['dataArray'];
-        $table_alias = $dataObject['tableAlias'];
-        $field = $dataObject['field'];
-        $field_module = $dataObject['relatedModuleBean'];
-        if ((isset($dataArray['source']) && $dataArray['source'] == 'custom_fields')) {
-            $select_field = $this->db->quoteIdentifier($table_alias . '_cstm') . '.' . $field->field;
-            $queryArray = $this->buildReportQueryJoin($table_alias . '_cstm', $table_alias . '_cstm',
-                $table_alias, $field_module, 'custom', $queryArray);
-        } else {
-            $select_field = $this->db->quoteIdentifier($table_alias) . '.' . $field->field;
+        if ((isset($dataObject['dataArray']['source']) && $dataObject['dataArray']['source'] == 'custom_fields')) {
+            $this->buildReportQueryJoinChart($dataObject, $dataObject['relatedModuleBean'], 'custom');
         }
-
-        $dataObject['selectField'] = $select_field;//TODO: investigate why select field is not in queryArray
-        $dataObject['queryArray'] = $queryArray;
-
     }
 
 
@@ -2015,19 +1974,17 @@ class AOR_Report extends Basic
      * @return string
      */
     private function BuildDataForDateTypeChart(&$dataObject) {
-        $field = $dataObject['field'];
-        $dataArray = $dataObject['dataArray'];
-        $select_field = $dataObject['selectField'];
-        $timedate =$dataObject['timeDate'];
-
-        if ($field->format && in_array($dataArray['type'], array('date', 'datetime', 'datetimecombo'))) {
-            if (in_array($dataArray['type'], array('datetime', 'datetimecombo'))) {
-                $select_field = $this->db->convert($select_field, 'add_tz_offset');
+        if ($dataObject['field']->format && in_array($dataObject['dataArray']['type'], array('date', 'datetime', 'datetimecombo'))) {
+            if (in_array($dataObject['dataArray']['type'], array('datetime', 'datetimecombo'))) {
+                $dataObject['currentFieldString'] = $this->db->convert($dataObject['currentFieldString'], 'add_tz_offset');
             }
-            $select_field = $this->db->convert($select_field, 'date_format',
-                array($timedate->getCalFormat($field->format)));
+            $dataObject['currentFieldString'] = $dataObject['']->db->convert(
+                $dataObject['currentFieldString'],
+                'date_format',
+                array(
+                    $dataObject['timeDate']->getCalFormat($dataObject['field']->format
+                    )));
         }
-        $dataObject['selectField'] = $select_field;
     }
 
     /**
@@ -2106,7 +2063,7 @@ class AOR_Report extends Basic
     private function SetGroupByChart(&$dataObject) {
         $queryArray = $dataObject['queryArray'];
         $field = $dataObject['field'];
-        $select_field = $dataObject['selectField'];
+        $select_field = $dataObject['currentFieldString'];
 
         if ($field->group_by == 1) {
             $queryArray['group_by'][] = $select_field;
@@ -2116,7 +2073,7 @@ class AOR_Report extends Basic
             $queryArray['second_group_by'][] = $select_field;
         }
         $dataObject['queryArray'] = $queryArray;
-        $dataObject['selectField'] = $select_field;
+        $dataObject['currentFieldString'] = $select_field;
     }
 
     /**
@@ -2149,7 +2106,7 @@ class AOR_Report extends Basic
     private function SetSortByChart(&$dataObject) {
         $queryArray = $dataObject['queryArray'];
         $field = $dataObject['field'];
-        $select_field = $dataObject['selectField'];
+        $select_field = $dataObject['currentFieldString'];
         if ($field->sort_by != '') {
             $queryArray['sort_by'][] = $select_field . " " . $field->sort_by;
         }
@@ -2206,6 +2163,9 @@ class AOR_Report extends Basic
 
 
     private function createQueryDataArrayChart(&$dataObject) {
+
+
+
         $path = unserialize(base64_decode($dataObject['field']->module_path));
         $pathExists = !empty($path[0]);
         $PathIsNotModuleDir = $path[0] != $dataObject['reportModuleBean']->module_dir;
@@ -2217,26 +2177,23 @@ class AOR_Report extends Basic
         }
         if ($pathExists && $PathIsNotModuleDir) {
             foreach ($path as $relationship) {
-                $this->BuildDataForRelationshipChart($dataObject,$relationship); //TODO: rename to BuildDataForRelationship should be inside for each relationship
+                $this->BuildDataForRelationshipChart($dataObject,$relationship); //TODO: rename to BuildDataForRelationship maybe should be inside for each relationship
             }
         }
         $this->BuildDataForLinkTypeChart($dataObject);
         $this->BuildDataForCurrencyTypeChart($dataObject);
+        $this->initialiseCurrentFieldString($dataObject);
         $this->BuildDataForCustomFieldChart($dataObject);
         $this->BuildDataForDateTypeChart($dataObject);
         $this->SetTableAliasChart($dataObject);
         $this->SetGroupByChart($dataObject);
         $this->SetSortByChart($dataObject);
 
-        $queryArray = $dataObject['queryArray'];
-        $select_field = $dataObject['selectField'];
-        $queryArray['select'][] = $select_field . " AS '" . $dataObject['field']->label . "'";
-
+        $dataObject['queryArray']['select'][] = $dataObject['currentFieldString'] . " AS '" . $dataObject['field']->label . "'";
         //disabled as not being set for chart creation will look into this for duplicate code createQueryDataArray
 //        if ($field->group_display == 1 && $group_value) {
 //            $queryArray['where'][] = $select_field . " = '" . $group_value . "' AND ";
 //        }
-        $dataObject['queryArray'] = $queryArray;
     }
 
 
@@ -3314,5 +3271,36 @@ class AOR_Report extends Basic
         $queryDataArray['id_select_group'][$bean->table_name] = $bean->db->quoteIdentifier($bean->table_name) . ".id";
 
         $dataObject['queryArray'] =  $queryDataArray;
+    }
+
+    /**
+     * @param $dataObject
+     * @param $relationship
+     * @param $relObj
+     */
+    private function populateDataObjectWithRelatedModuleBean(&$dataObject, $relationship)
+    {
+        $relationshipLink = $dataObject['reportModuleBean']->$relationship;/** @var $relationshipLink Link2 */
+        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
+        if ($relationshipSide == 'LHS') {
+            $relModuleSide = 'rhs_module';
+        } else {
+            $relModuleSide = 'lhs_module';
+        }
+        $relObj = $relationshipLink->getRelationshipObject();
+        $relatedModuleName = $relObj->def[$relModuleSide];
+        $dataObject['relatedModuleBean'] = BeanFactory::getBean($relatedModuleName);
+    }
+
+    /**
+     * @param $dataObject
+     */
+    private function initialiseCurrentFieldString(&$dataObject)
+    {
+        if ((isset($dataObject['dataArray']['source']) && $dataObject['dataArray']['source'] == 'custom_fields')) {
+            $dataObject['currentFieldString'] = $this->db->quoteIdentifier($dataObject['tableAlias'] . '_cstm') . '.' . $dataObject['field']->field;
+        } else {
+            $dataObject['currentFieldString'] = $this->db->quoteIdentifier($dataObject['tableAlias']) . '.' . $dataObject['field']->field;
+        }
     }
 }
