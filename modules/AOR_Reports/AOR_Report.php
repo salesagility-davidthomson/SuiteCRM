@@ -1518,15 +1518,9 @@ class AOR_Report extends Basic
 
     public function buildQueryArrayWhereForChart(&$dataObject, $model, $app_list_strings, $sugar_config,  $extra = array())
     {
-        if (isset($extra['where']) && $extra['where']) {
-            $query_array['where'][] = implode(' AND ', $extra['where']) . ' AND ';
-        }
-
-        $closure = false;
-        if (!empty($dataObject['queryArray']['where'])) {
-            $dataObject['queryArray']['where'][] = '(';
-            $closure = true;
-        }
+        $this->buildQueryArrayFromExtraArray($dataObject, $extra);
+        $closure = $this->getClosureFlag($dataObject);
+        $this->setQueryArrayClosure($dataObject);
 
         $rowArray = $model->getChartDataArray2($dataObject['reportId'], $dataObject['reportModuleBean']);
 
@@ -2223,6 +2217,39 @@ class AOR_Report extends Basic
         return array($data, $condition);
     }
 
+    /**
+     * @param $dataObject
+     * @return array
+     */
+    public function getClosureFlag(&$dataObject)
+    {
+        $closure = false;
+        if (!empty($dataObject['queryArray']['where'])) {
+            $closure = true;
+        }
+        return $closure;
+    }
+
+    /**
+     * @param $dataObject
+     */
+    public function setQueryArrayClosure(&$dataObject)
+    {
+        if (!empty($dataObject['queryArray']['where'])) {
+            $dataObject['queryArray']['where'][] = '(';
+        }
+    }
+
+    /**
+     * @param $dataObject
+     * @param $extra
+     */
+    public function buildQueryArrayFromExtraArray(&$dataObject, $extra)
+    {
+        if (isset($extra['where']) && $extra['where']) {
+            $dataObject['queryArray']['where'][] = implode(' AND ', $extra['where']) . ' AND ';
+        }
+    }
 
 
     private function primeDataForRelateChart($dataObject) {
