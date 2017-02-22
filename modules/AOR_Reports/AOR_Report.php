@@ -1124,7 +1124,7 @@ class AOR_Report extends Basic
                 $field->label = str_replace(' ', '_', $field->label) . $i;
                 $dataObject['field'] = $field;
                 $dataObject['tableAlias'] = $dataObject['module']->table_name;
-                $dataObject['oldAlias'] = $dataObject['tableAlias'];
+                $dataObject['oldAlias'] = $dataObject['tableAlias'];// why set this now?
 
                 $this->createQueryDataArrayChart($dataObject);
                 ++$i;
@@ -1242,7 +1242,7 @@ class AOR_Report extends Basic
 
         $relatedModuleBean = BeanFactory::getBean($relatedModuleName);
 
-        $dataObject['fieldModule'] = $relatedModuleBean;
+        $dataObject['fieldModule'] = $relatedModuleBean;//TODO: rename fieldModule to relatedModule
         $tableAlias  = $relatedModuleBean->table_name;
         $parentAlias = $parentModulebean->table_name;
         $tableAlias = $tableAlias . ":" . $tableAlias;
@@ -1581,11 +1581,11 @@ class AOR_Report extends Basic
                     $conditionField,
                     $where_set
                     ) = $this->buildQueryForConditionTypeChart( $dataObject, $sugar_config,$app_list_strings );
-                $condition = $dataObject['condition']
-                    $dataObject['queryArray'],
-                    $value,
-                    $conditionField,
-                    $where_set
+//                    $condition = $dataObject['condition']
+//                    $dataObject['queryArray'],
+//                    $value,//not query
+//                    $conditionField,
+//                    $where_set
 
 
                 //handle like conditions
@@ -1596,8 +1596,15 @@ class AOR_Report extends Basic
                     $value = "{$value} OR {$conditionField} IS NULL";
                 }
 
-                $dataObject['queryArray'] = $this->whereNotSet($dataObject['queryArray'], $where_set, $condition,
-                    $app_list_strings, $dataObject['tiltLogicOperator'], $dataObject['allowedOperatorList'], $conditionField, $value);
+                $dataObject['queryArray'] = $this->whereNotSet(
+                    $dataObject['queryArray'],
+                    $where_set,
+                    $condition,
+                    $app_list_strings,
+                    $dataObject['tiltLogicOperator'],
+                    $dataObject['allowedOperatorList'],
+                    $conditionField,
+                    $value);
 
                 $dataObject['tiltLogicOperator'] = false;
             } else {
@@ -2743,15 +2750,8 @@ class AOR_Report extends Basic
 
 
     private function buildQueryForConditionTypeChart(&$dataObject,$sugar_config,$app_list_strings) {
-
-        $queryArray = $dataObject['queryArray'];
-        $conditionType = $dataObject['condition']->value_type;
-        $condition_module = $dataObject['module'];
-        $condition = $dataObject['condition'];
-        $beanList = $dataObject['beanList'];
-        $oldAlias = $dataObject['oldAlias'];
         $path = unserialize(base64_decode($dataObject['field']->module_path));
-//                            $relationship,
+        $relationship ='';//TODO: need to try and figure out where this should come from
         $table_alias = $dataObject['tableAlias'];
         $field = $dataObject['queryArray']['conditionFields'][0];
         $aor_sql_operator_list = $dataObject['allowedOperatorList'];
