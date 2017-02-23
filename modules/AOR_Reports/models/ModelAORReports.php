@@ -71,7 +71,7 @@ class ModelAORReports
         return $rowArray;
     }
 
-    public function getChartDataArray2($reportId, $bean)
+    public function getConditionsDataArrayChart($reportId, $bean)
     {
         $sql = "SELECT id FROM aor_conditions WHERE aor_report_id = '" . $reportId . "' AND deleted = 0 ORDER BY condition_order ASC";
         $result = $bean->db->query($sql);

@@ -997,9 +997,9 @@ class AOR_Report extends Basic
     {
         global $beanList, $timedate, $app_list_strings, $sugar_config;
         $moduleName = $this->report_module;
-        $ResultRowArray = $this->getResultRows();
-        $fields = $this->createLabels($ResultRowArray, $beanList);
-        $mainGroupField = $this->getMainGroupSet($ResultRowArray);
+        $ResultRowArray = $this->getFieldsDataArrayChart();
+        $fields = $this->createLabelsChart($ResultRowArray, $beanList);
+        $mainGroupField = $this->getMainGroupSetChart($ResultRowArray);
         $bean = BeanFactory::getBean($moduleName);
 
         $dataObject = array(
@@ -1018,7 +1018,9 @@ class AOR_Report extends Basic
             'condition'=>null,
             'conditionFieldDefs'=>null,
             'tiltLogicOperator'=>true,
-            'allowedOperatorList'=>$this->getAllowedOperatorList(),
+            'allowedOperatorList'=>$this->getAllowedOperatorListChart(),
+            'fieldMetaData'=>null,
+            'WhereStatement',
         );
 
         $reportId = $this->id;
@@ -1057,7 +1059,7 @@ class AOR_Report extends Basic
     public function buildReportQueryChart(&$dataObject, $app_list_strings, $sugar_config, $extra = array())
     {
         $model = new ModelAORReports();
-        $this->DataArrayGetTableData($dataObject);
+        $this->DataArrayGetTableDataChart($dataObject);
         $this->buildQueryArraySelectForChart($dataObject, $model);
         try {
             $this->buildQueryArrayWhereForChart($dataObject, $model, $app_list_strings, $sugar_config, $extra);
@@ -1089,7 +1091,6 @@ class AOR_Report extends Basic
                 $field->label = str_replace(' ', '_', $field->label) . $i;
                 $dataObject['field'] = $field;
                 $dataObject['tableAlias'] = $dataObject['reportModuleBean']->table_name;// why set this now?
-//                $dataObject['oldAlias'] = $dataObject['tableAlias'];// why set this now?
 
                 $this->createQueryDataArrayChart($dataObject);
                 ++$i;
@@ -1201,10 +1202,10 @@ class AOR_Report extends Basic
                 case 'custom':
                     $dataObject['queryArray']['join'][$tableAlias] =
                         'LEFT JOIN '
-                        . $this->db->quoteIdentifier($dataObject['reportModuleBean']->get_custom_table_name())
-                        . ' ' . $this->db->quoteIdentifier($relationship) . ' ON '
-                        . $this->db->quoteIdentifier($dataObject['reportModuleBean']->table_name)
-                        . '.id = ' . $this->db->quoteIdentifier($relationship) . '.id_c ';
+                        . $dataObject['relatedModuleBean']->db->quoteIdentifier($dataObject['reportModuleBean']->get_custom_table_name())
+                        . ' ' . $dataObject['relatedModuleBean']->db->quoteIdentifier($relationship) . ' ON '
+                        . $dataObject['relatedModuleBean']->db->quoteIdentifier($dataObject['reportModuleBean']->table_name)
+                        . '.id = ' . $dataObject['relatedModuleBean']->db->quoteIdentifier($relationship) . '.id_c ';
                     break;
 
                 case 'relationship':
@@ -1232,7 +1233,7 @@ class AOR_Report extends Basic
                             $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($dataObject['reportModuleBean']->table_name);
                         }
                         $linkAlias = $dataObject['reportModuleBean']->table_name . "|" . $tableAlias;
-                        $params['join_table_link_alias'] = $this->db->quoteIdentifier($linkAlias);
+                        $params['join_table_link_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($linkAlias);
                         $join = $dataObject['reportModuleBean']->$relationship->getJoin($params, true);
                         $dataObject['queryArray']['join'][$tableAlias] = $join['join'];
                         if ($dataObject['relatedModuleBean'] != null) {
@@ -1288,6 +1289,21 @@ class AOR_Report extends Basic
      * @return mixed
      */
     private function getAllowedOperatorList()
+    {
+        $aor_sql_operator_list['Equal_To'] = '=';
+        $aor_sql_operator_list['Not_Equal_To'] = '!=';
+        $aor_sql_operator_list['Greater_Than'] = '>';
+        $aor_sql_operator_list['Less_Than'] = '<';
+        $aor_sql_operator_list['Greater_Than_or_Equal_To'] = '>=';
+        $aor_sql_operator_list['Less_Than_or_Equal_To'] = '<=';
+        $aor_sql_operator_list['Contains'] = 'LIKE';
+        $aor_sql_operator_list['Starts_With'] = 'LIKE';
+        $aor_sql_operator_list['Ends_With'] = 'LIKE';
+
+        return $aor_sql_operator_list;
+    }
+
+    private function getAllowedOperatorListChart()
     {
         $aor_sql_operator_list['Equal_To'] = '=';
         $aor_sql_operator_list['Not_Equal_To'] = '!=';
@@ -1486,17 +1502,13 @@ class AOR_Report extends Basic
 
     public function buildQueryArrayWhereForChart(&$dataObject,ModelAORReports $model, $app_list_strings, $sugar_config,  $extra = array())
     {
-        $this->buildQueryArrayFromExtraArray($dataObject, $extra);
-        $closure = $this->getClosureFlag($dataObject);
-        $this->setQueryArrayClosure($dataObject);
-
-        $rowArray = $model->getChartDataArray2($dataObject['reportId'], $dataObject['reportModuleBean']);
-
-        //checkIfUserIsAllowAccessToModule
+        $this->buildQueryArrayFromExtraArrayChart($dataObject, $extra);
+        $closure = $this->getClosureFlagChart($dataObject);
+        $this->setQueryArrayClosureChart($dataObject);
+        $rowArray = $model->getConditionsDataArrayChart($dataObject['reportId'], $dataObject['reportModuleBean']);
         if (!$this->checkIfUserIsAllowedAccessToRelatedModulesChart($rowArray, $dataObject)) {
             throw new Exception('AOR_Report:buildQueryArrayWhere: User Not Allowed Access To Module '.$dataObject['reportModuleBean'], 102);
         }
-
         //build where statement
         foreach ($rowArray as $row) {
             $condition = new AOR_Condition();
@@ -1514,33 +1526,21 @@ class AOR_Report extends Basic
             $isSqlOperatorAllowed = isset($dataObject['allowedOperatorList'][$condition->operator]);
             if ($isSqlOperatorAllowed) {
                 $this->setFieldTablesSuffixChart($dataObject);
-
                 $this->buildJoinQueryForCustomFieldsChart($dataObject);
-
                 $this->buildConditionUserParamsChart($dataObject);
 
-                //what type of condition is it?
-//                $relationship,//$data['relationship']? see buildReportQueryJoin
-                list(
-                    $condition,
-                    $dataObject['queryArray'],
-                    $value,
-                    $conditionField,
-                    $where_set
-                    ) = $this->buildQueryForConditionTypeChart( $dataObject, $sugar_config,$app_list_strings );
-//                    $condition = $dataObject['condition']
-//                    $dataObject['queryArray'],
-//                    $value,//not query
-//                    $conditionField,
-//                    $where_set
 
+                $where_set = $this->buildQueryForConditionTypeChart( $dataObject, $sugar_config,$app_list_strings );
+                $condition = $dataObject['condition'];
+                $WhereStatement = $dataObject['whereStatement'];
+                $conditionField = $dataObject['queryArray']['conditionFields'][0];
 
                 //handle like conditions
                 $conditionOperator = $condition->operator;
-                $value = $this->handleLikeConditions($conditionOperator, $value);
+                $WhereStatement = $this->handleLikeConditions($conditionOperator, $WhereStatement);
 
                 if ($condition->value_type == 'Value' && !$condition->value && $condition->operator == 'Equal_To') {
-                    $value = "{$value} OR {$conditionField} IS NULL";
+                    $WhereStatement = "{$WhereStatement} OR {$conditionField} IS NULL";
                 }
 
                 $dataObject['queryArray'] = $this->whereNotSet(
@@ -1551,7 +1551,7 @@ class AOR_Report extends Basic
                     $dataObject['tiltLogicOperator'],
                     $dataObject['allowedOperatorList'],
                     $conditionField,
-                    $value);
+                    $WhereStatement);
 
                 $dataObject['tiltLogicOperator'] = false;
             } else {
@@ -1587,7 +1587,7 @@ class AOR_Report extends Basic
     }
 
 
-    private function createLabels($rowArray,$beanList) {
+    private function createLabelsChart($rowArray,$beanList) {
         $i = 0;
 
         foreach ($rowArray as $row) {
@@ -2185,29 +2185,22 @@ class AOR_Report extends Basic
         return array($data, $condition);
     }
 
-    private function primeDataForRelateChart($dataObject) {
-        $fieldMetaData = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->value];
-
-        if (isset($fieldMetaData['id_name'])) {
-            $dataObject['condition']->field = $fieldMetaData['id_name'];
-            $data_new = $dataObject['condition']->field_defs[$dataObject['condition']->field];
-            if (!empty($data_new['source']) && $data_new['source'] == 'non-db' && $data_new['type'] != 'link' && isset($fieldMetaData['link'])) {
-                $data_new['type'] = 'link';
-                $data_new['relationship'] = $fieldMetaData['link'];
+    private function updateFieldMetadataIfExistsChart(&$dataObject) {
+        if (isset($dataObject['fieldMetaData']['id_name'])) {
+            $newFieldMetaData = $dataObject['condition']->field_defs[$dataObject['fieldMetaData']['id_name']];
+            if (!empty($newFieldMetaData['source']) && $newFieldMetaData['source'] == 'non-db' && $newFieldMetaData['type'] != 'link' && isset($dataObject['fieldMetaData']['link'])) {
+                $newFieldMetaData['type'] = 'link';
+                $newFieldMetaData['relationship'] = $dataObject['fieldMetaData']['link'];
             }
-            $fieldMetaData = $data_new;
-
-            return array($fieldMetaData, $dataObject['condition']);
+            $dataObject['fieldMetaData'] = $newFieldMetaData;
         }
-
-        return array($fieldMetaData, $dataObject['condition']);
     }
 
     /**
      * @param $dataObject
      * @return array
      */
-    public function getClosureFlag(&$dataObject)
+    public function getClosureFlagChart(&$dataObject)
     {
         $closure = false;
         if (!empty($dataObject['queryArray']['where'])) {
@@ -2219,7 +2212,7 @@ class AOR_Report extends Basic
     /**
      * @param $dataObject
      */
-    public function setQueryArrayClosure(&$dataObject)
+    public function setQueryArrayClosureChart(&$dataObject)
     {
         if (!empty($dataObject['queryArray']['where'])) {
             $dataObject['queryArray']['where'][] = '(';
@@ -2230,7 +2223,7 @@ class AOR_Report extends Basic
      * @param $dataObject
      * @param $extra
      */
-    public function buildQueryArrayFromExtraArray(&$dataObject, $extra)
+    public function buildQueryArrayFromExtraArrayChart(&$dataObject, $extra)
     {
         if (isset($extra['where']) && $extra['where']) {
             $dataObject['queryArray']['where'][] = implode(' AND ', $extra['where']) . ' AND ';
@@ -2295,52 +2288,23 @@ class AOR_Report extends Basic
     }
 
 
-    private function primeDataForLinkChart(
-        $query,
-        $fieldMetaData,
-        $beanList,
-        $condition_module,
-        $oldAlias,
-        $path,
-        $relationship,
-        $condition,
-        $table_alias
-    ) {
-
-        $query = $dataObject['queryArray'];
+    private function BuildConditionForNonDbChart(&$dataObject) {
         $fieldMetaData = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->value];
         $beanList = $dataObject['beanList'];
-        $condition_module = $dataObject['reportModuleBean'];
-        $oldAlias = $dataObject['oldAlias'];
         $path = unserialize(base64_decode($dataObject['field']->module_path));
-        $relationship = $relationship;
-        $condition = $dataObject['condition'];
-        $table_alias = $dataObject['tableAlias'];
 
         if ($fieldMetaData['source'] == 'non-db') {
-            $new_field_module = new $beanList[getRelatedModule($condition_module->module_dir, $fieldMetaData['relationship'])];
-            $table_alias = $fieldMetaData['relationship'];
-            $query = $this->buildReportQueryJoin(
-                $fieldMetaData['relationship'],
-                $table_alias,
-                $oldAlias,
-                $condition_module,
-                'relationship',
-                $query,
-                $new_field_module
-            );
-            $condition_module = $new_field_module;
+            $new_field_module = new $beanList[getRelatedModule($dataObject['reportModuleBean']->module_dir, $fieldMetaData['relationship'])];
+            $dataObject['tableAlias'] = $fieldMetaData['relationship'];
+            $this->buildReportQueryJoinChart($dataObject,$fieldMetaData['relationship'],'relationship');
+            $dataObject['reportModuleBean'] = $new_field_module;
 
             // Debugging: security groups conditions - It's a hack to just get the query working
-            if ($condition_module->module_dir = 'SecurityGroups' && count($path) > 1) {
-                $table_alias = $oldAlias . ':' . $relationship;
+            if ($dataObject['reportModuleBean']->module_dir = 'SecurityGroups' && count($path) > 1) {
+                $dataObject['tableAlias'] = $dataObject['oldAlias'] . ':' . $fieldMetaData['relationship'];
             }
-            $condition->field = 'id';
-
-            return array($table_alias, $query, $condition_module);
+            $dataObject['condition']->field = 'id';
         }
-
-        return array($table_alias, $query, $condition_module);
     }
     
     /**
@@ -2402,10 +2366,9 @@ class AOR_Report extends Basic
 
 
     private function buildConditionUserParamsChart(&$dataObject) {
-        $params = $dataObject['user_parameters'];
-        if (!empty($params[$dataObject['condition']->id])) {
+        if (!empty($dataObject['user_parameters'][$dataObject['condition']->id])) {
             if ($dataObject['condition']->parameter) {
-                $condParam = $params[$dataObject['condition']->id];
+                $condParam = $dataObject['user_parameters'][$dataObject['condition']->id];
                 $dataObject['condition']->value = $condParam['value'];
                 $dataObject['condition']->operator = $condParam['operator'];
                 $dataObject['condition']->value_type = $condParam['type'];
@@ -2514,6 +2477,48 @@ class AOR_Report extends Basic
         return array($value, $field, $query);
     }
 
+    private function processForDateFromChart($sugar_config, $dataObject)
+    {
+        $params = $this->getConditionParametersChart($dataObject);
+        $firstParam = $params[0];
+        switch ($firstParam) {
+            case 'now':
+                if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
+                    $dataObject['whereStatement'] = 'GetDate()';
+                } else {
+                    $dataObject['whereStatement'] = 'NOW()';
+                }
+                break;
+            case 'today':
+                if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
+                    $dataObject['whereStatement'] = 'CAST(GETDATE() AS DATE)';
+                } else {
+                    $dataObject['queryArray']['conditionFields'][0] = 'DATE(' . $dataObject['queryArray']['conditionFields'][0] . ')';
+                    $dataObject['whereStatement'] = 'Curdate()';
+                }
+                break;
+            default:
+                $data = $dataObject['reportModuleBean']->field_defs[$firstParam];
+                $tableName = $dataObject['reportModuleBean']->table_name;
+                $table_alias = $tableName;
+                $fieldName = $firstParam;
+                $dataSourceIsSet = isset($data['source']);
+                if ($dataSourceIsSet) {
+                    $isCustomField = ($data['source'] == 'custom_fields') ? true : false;
+                }
+
+                //setValueSuffix
+                $dataObject['whereStatement'] = $this->setFieldTablesSuffix(
+                    $isCustomField,
+                    $tableName,
+                    $table_alias,
+                    $fieldName);
+                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'],
+                    $table_alias, $tableName, $dataObject['reportModuleBean']);
+                break;
+        }
+    }
+
     /**
      * @param $secondParam
      * @param $fourthParam
@@ -2549,6 +2554,29 @@ class AOR_Report extends Basic
         }
 
         return $value;
+    }
+
+    private function processForDateOtherChart($sugar_config,$app_list_strings,$dataObject) {
+        $params = $this->getConditionParametersChart($dataObject);
+        $secondParam = $params[1];
+        $thirdParam = $params[2];
+        $fourthParam = $params[3];
+        if ($secondParam != 'now') {
+            switch ($fourthParam) {
+                case 'business_hours';
+                    //business hours not implemented for query, default to hours
+                    $fourthParam = 'hours';
+                default:
+                    if ($sugar_config['dbconfig']['db_type'] == 'mssql') {
+                        $dataObject['whereStatement'] = 'DATEADD(' . $fourthParam . ',  ' . $app_list_strings['aor_date_operator'][$secondParam] . ' ' . $thirdParam .','. $dataObject['whereStatement'].')';
+                    } else {
+                        $dataObject['whereStatement'] = 'DATE_ADD('.$dataObject['whereStatement'].', INTERVAL ' . $app_list_strings['aor_date_operator'][$secondParam] . '" '.$thirdParam.' " '. $fourthParam .' ")"';
+                    }
+                    break;
+            }
+        }
+
+        return $dataObject['whereStatement'];
     }
 
     /**
@@ -2706,79 +2734,14 @@ class AOR_Report extends Basic
 
 
     private function buildQueryForConditionTypeChart(&$dataObject,$sugar_config,$app_list_strings) {
-
-        $relationship ='';//TODO: need to try and figure out where this should come from
         switch ($dataObject['condition']->value_type) {
-            case 'Field': // is it a specific field
-                //processWhereConditionForTypeField
-                $fieldMetaData = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->value];
-
-                switch ($fieldMetaData['type']) {
-                    case 'relate':
-                        list($fieldMetaData, $dataObject['condition']) = $this->primeDataForRelateChart($dataObject);
-                        break;
-                    case 'link':
-                        $relationshipExists = $dataObject['reportModuleBean']->load_relationship($relationship);
-                        $this->populateDataObjectWithRelatedModuleBean($dataObject, $relationship);
-                        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
-
-
-                        list(
-                            $dataObject['tableAlias'],
-                            $dataObject['queryArray'],
-                            $dataObject['reportModuleBean']) =
-                            $this->primeDataForLinkChart(
-                                $dataObject['queryArray'],
-                                $fieldMetaData,
-                                $dataObject['beanList'],
-                                $dataObject['reportModuleBean'],
-                                $dataObject['oldAlias'],
-                                $path,
-                                $relationship,
-                                $dataObject['condition'],
-                                $dataObject['tableAlias']
-                            );
-                        break;
-                }
-
-
-                $tableName = $dataObject['reportModuleBean']->table_name;
-                $fieldName = $dataObject['condition']->value;
-                $dataSourceIsSet = isset($fieldMetaData['source']);
-                if ($dataSourceIsSet) {
-                    $isCustomField = ($fieldMetaData['source'] == 'custom_fields') ? true : false;
-                }
-
-                //setValueSuffix
-                $value = $this->setFieldTablesSuffix($isCustomField, $tableName, $dataObject['tableAlias'], $fieldName);
-                $dataObject['queryArray'] = $this->buildJoinQueryForCustomFields($isCustomField, $dataObject['queryArray'], $dataObject['tableAlias'],
-                    $tableName,
-                    $dataObject['reportModuleBean']);
+            case 'Field':
+                $this->BuildQueryForConditionTypeFieldChart($dataObject);
                 break;
 
             case 'Date': //is it a date
-                //processWhereConditionForTypeDate
-                $params = unserialize(base64_decode($dataObject['condition']->value));
-
-                // Fix for issue #1272 - AOR_Report module cannot update Date type parameter.
-                if ($params == false) {
-                    $params = $dataObject['condition']->value;
-                }
-
-                $firstParam = $params[0];
-                list($value, $dataObject['queryArray']['conditionFields'][0], $dataObject['queryArray']) = $this->processForDateFrom(
-                    $firstParam,
-                    $sugar_config,
-                    $dataObject['queryArray']['conditionFields'][0],
-                    $dataObject['queryArray'],
-                    $dataObject['reportModuleBean']);
-
-                $secondParam = $params[1];
-                $thirdParam = $params[2];
-                $fourthParam = $params[3];
-                $value = $this->processForDateOther($secondParam, $fourthParam, $sugar_config,
-                    $app_list_strings, $thirdParam, $value);
-
+                $this->processForDateFromChart($sugar_config,$dataObject);
+                $dataObject['whereStatement'] = $this->processForDateOtherChart($sugar_config,$app_list_strings,$dataObject);
                 break;
 
             case 'Multi': //are there multiple conditions setup
@@ -2790,17 +2753,17 @@ class AOR_Report extends Basic
                 }
                 $multi_values = unencodeMultienum($dataObject['condition']->value);
                 if (!empty($multi_values)) {
-                    $value = '(';
+                    $dataObject['whereStatement'] = '(';
                     foreach ($multi_values as $multi_value) {
-                        if ($value != '(') {
-                            $value .= $separtor;
+                        if ($dataObject['whereStatement'] != '(') {
+                            $dataObject['whereStatement'] .= $separtor;
                         }
                         //TODO: Rationalize this strange logic below $dataObject['allowedOperatorList'][$dataObject['condition']->operator]
-                        $value .= $dataObject['queryArray']['conditionFields'][0] . ' ' . $dataObject['allowedOperatorList'][$dataObject['condition']->operator] . " '" . $multi_value . "'";
+                        $dataObject['whereStatement'] .= $dataObject['queryArray']['conditionFields'][0] . ' ' . $dataObject['allowedOperatorList'][$dataObject['condition']->operator] . " '" . $multi_value . "'";
                     }
-                    $value .= ')';
+                    $dataObject['whereStatement'] .= ')';
                 }
-                $dataObject['queryArray']['where'][] = ($dataObject['tiltLogicOperator'] ? '' : ($dataObject['condition']->logic_op ? $dataObject['condition']->logic_op . ' ' : 'AND ')) . $value;
+                $dataObject['queryArray']['where'][] = ($dataObject['tiltLogicOperator'] ? '' : ($dataObject['condition']->logic_op ? $dataObject['condition']->logic_op . ' ' : 'AND ')) . $dataObject['whereStatement'];
                 $where_set = true;
                 break;
             case "Period": //is it a period of time
@@ -2810,29 +2773,23 @@ class AOR_Report extends Basic
                 } else {
                     $params = base64_decode($dataObject['condition']->value);
                 }
-                $value = '"' . getPeriodDate($params)->format('Y-m-d H:i:s') . '"';
+                $dataObject['whereStatement'] = '"' . getPeriodDate($params)->format('Y-m-d H:i:s') . '"';
                 break;
             case "CurrentUserID": //not sure what this is for
                 //processWhereConditionForTypeCurrentUser
                 global $current_user;
-                $value = '"' . $current_user->id . '"';
+                $dataObject['whereStatement'] = '"' . $current_user->id . '"';
                 break;
             case 'Value': //is it a specific value
                 //processWhereConditionForTypeValue
-                $value = "'" . $this->db->quote($dataObject['condition']->value) . "'";
+                $dataObject['whereStatement'] = "'" . $this->db->quote($dataObject['condition']->value) . "'";
                 break;
             default:
-                $value = "'" . $this->db->quote($dataObject['condition']->value) . "'";
+                $dataObject['whereStatement'] = "'" . $this->db->quote($dataObject['condition']->value) . "'";
                 break;
         }
 
-        return array(
-            $dataObject['condition'],
-            $dataObject['queryArray'],
-            $value,
-            $dataObject['queryArray']['conditionFields'][0],
-            $where_set
-        );
+        return $where_set;
     }
 
 
@@ -3238,7 +3195,7 @@ class AOR_Report extends Basic
     /**
      * @return bool|resource
      */
-    private function getResultRows()
+    private function getFieldsDataArrayChart()
     {
         $sql = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY field_order ASC";
         $result = $this->db->query($sql);
@@ -3255,7 +3212,7 @@ class AOR_Report extends Basic
      * @param $mainGroupField
      * @return AOR_Field
      */
-    private function getMainGroupSet($rowArray)
+    private function getMainGroupSetChart($rowArray)
     {
         $mainGroupField = 'NOTSET';
         foreach ($rowArray as $row) {
@@ -3285,7 +3242,7 @@ class AOR_Report extends Basic
      * @return array
      * @internal param $moduleName
      */
-    private function DataArrayGetTableData(&$dataObject)
+    private function DataArrayGetTableDataChart(&$dataObject)
     {
 
         $bean = $dataObject['reportModuleBean'];
@@ -3325,5 +3282,41 @@ class AOR_Report extends Basic
         } else {
             $dataObject['currentFieldString'] = $this->db->quoteIdentifier($dataObject['tableAlias']) . '.' . $dataObject['field']->field;
         }
+    }
+
+    /**
+     * @param $dataObject
+     */
+    private function BuildQueryForConditionTypeFieldChart(&$dataObject)
+    {
+        $dataObject['fieldMetaData'] = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->value];
+        switch ($dataObject['fieldMetaData']['type']) {
+            case 'relate':
+                $this->updateFieldMetadataIfExistsChart($dataObject);
+                break;
+            case 'link':
+                $this->BuildConditionForNonDbChart($dataObject);//TODO: This is missing relationship information
+                break;
+        }
+        $this->setFieldTablesSuffixChart($dataObject);
+        $this->buildJoinQueryForCustomFieldsChart($dataObject);
+        $dataObject['whereStatement'] = $dataObject['queryArray']['conditionFields'][0];
+    }
+
+    /**
+     * @param $dataObject
+     * @return mixed
+     */
+    private function getConditionParametersChart(&$dataObject)
+    {
+        $params = unserialize(base64_decode($dataObject['condition']->value));
+        // Fix for issue #1272 - AOR_Report module cannot update Date type parameter.
+        if ($params == false) {
+            $params = $dataObject['condition']->value;
+
+            return $params;
+        }
+
+        return $params;
     }
 }
