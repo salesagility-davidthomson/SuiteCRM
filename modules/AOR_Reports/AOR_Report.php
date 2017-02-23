@@ -1,51 +1,16 @@
 <?php
-
-/**
- *
- * SugarCRM Community Edition is a customer relationship management program developed by
- * SugarCRM, Inc. Copyright (C) 2004-2013 SugarCRM Inc.
- *
- * SuiteCRM is an extension to SugarCRM Community Edition developed by SalesAgility Ltd.
- * Copyright (C) 2011 - 2017 SalesAgility Ltd.
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU Affero General Public License version 3 as published by the
- * Free Software Foundation with the addition of the following permission added
- * to Section 15 as permitted in Section 7(a): FOR ANY PART OF THE COVERED WORK
- * IN WHICH THE COPYRIGHT IS OWNED BY SUGARCRM, SUGARCRM DISCLAIMS THE WARRANTY
- * OF NON INFRINGEMENT OF THIRD PARTY RIGHTS.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more
- * details.
- *
- * You should have received a copy of the GNU Affero General Public License along with
- * this program; if not, see http://www.gnu.org/licenses or write to the Free
- * Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301 USA.
- *
- * You can contact SugarCRM, Inc. headquarters at 10050 North Wolfe Road,
- * SW2-130, Cupertino, CA 95014, USA. or at email address contact@sugarcrm.com.
- *
- * The interactive user interfaces in modified source and object code versions
- * of this program must display Appropriate Legal Notices, as required under
- * Section 5 of the GNU Affero General Public License version 3.
- *
- * In accordance with Section 7(b) of the GNU Affero General Public License version 3,
- * these Appropriate Legal Notices must retain the display of the "Powered by
- * SugarCRM" logo and "Supercharged by SuiteCRM" logo. If the display of the logos is not
- * reasonably feasible for  technical reasons, the Appropriate Legal Notices must
- * display the words  "Powered by SugarCRM" and "Supercharged by SuiteCRM".
- */
 include_once __DIR__.DIRECTORY_SEPARATOR.'rootPath.php';
 require_once ROOTPATH.'/modules/AOW_WorkFlow/aow_utils.php';
 require_once ROOTPATH.'/modules/AOR_Reports/aor_utils.php';
 require_once ROOTPATH.'/modules/AOR_Reports/models/report/ReportFactory.php';
 require_once ROOTPATH.'/modules/AOR_Reports/models/ModelAORReports.php';
+require_once ROOTPATH.'/modules/AOR_Reports/includes/AorSiteUtils.php';
+require_once ROOTPATH.'/modules/AOR_Reports/includes/AorReportUtils.php';
 
 use modules\AOR_Reports\models\ModelAORReports as ModelAORReports;
 use modules\AOR_Reports\models\report\ReportFactory as ReportFactory;
+use modules\AOR_Reports\includes\AorReportsUtils as AorReportsUtils;
+use modules\AOR_Reports\includes\AorSiteUtils as AorSiteUtils;
 
 class AOR_Report extends Basic
 {
@@ -1223,27 +1188,30 @@ class AOR_Report extends Basic
     }
 
 
-    public function buildReportQueryJoinChart(&$dataObject, $relationship, $type = 'relationship') {
+    public function buildReportQueryJoinChart(&$dataObject, $relationship = false, $type = 'relationship') {
 
-        $relationshipExists = $dataObject['reportModuleBean']->load_relationship($relationship);
 
-        $this->populateDataObjectWithRelatedModuleBean($dataObject, $relationship);
-
-        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
 
         $tableAlias  = $dataObject['relatedModuleBean']->table_name;
-        $parentAlias = $dataObject['reportModuleBean']->table_name;
         $tableAlias = $tableAlias . ":" . $tableAlias;
 
         $joinNotSet = !isset($dataObject['queryArray']['join'][$tableAlias]);
         if ($joinNotSet) {
             switch ($type) {
                 case 'custom':
-                    $dataObject['queryArray']['join'][$tableAlias] = 'LEFT JOIN ' . $this->db->quoteIdentifier($dataObject['reportModuleBean']->get_custom_table_name()) . ' ' . $this->db->quoteIdentifier($relationship) . ' ON ' . $this->db->quoteIdentifier($parentAlias) . '.id = ' . $this->db->quoteIdentifier($relationship) . '.id_c ';
+                    $dataObject['queryArray']['join'][$tableAlias] =
+                        'LEFT JOIN '
+                        . $this->db->quoteIdentifier($dataObject['reportModuleBean']->get_custom_table_name())
+                        . ' ' . $this->db->quoteIdentifier($relationship) . ' ON '
+                        . $this->db->quoteIdentifier($dataObject['reportModuleBean']->table_name)
+                        . '.id = ' . $this->db->quoteIdentifier($relationship) . '.id_c ';
                     break;
 
                 case 'relationship':
+                    $relationshipExists = $dataObject['reportModuleBean']->load_relationship($relationship);
                     if ($relationshipExists) {
+                        $this->populateDataObjectWithRelatedModuleBean($dataObject, $relationship);
+                        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
                         $params['join_type'] = 'LEFT JOIN';
                         $isOneToMany = $dataObject['reportModuleBean']->$relationship->relationship_type != 'one-to-many';
                         if ($isOneToMany) {
@@ -1251,19 +1219,19 @@ class AOR_Report extends Basic
                             if ($RelationshipIsLeftHandSide) {
                                 $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
                                 $params['join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
-                                $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
+                                $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($dataObject['reportModuleBean']->table_name);
                             } else {
-                                $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
+                                $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($dataObject['reportModuleBean']->table_name);
                                 $params['join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
                                 $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
                             }
 
                         } else {
-                            $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
+                            $params['right_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($dataObject['reportModuleBean']->table_name);
                             $params['join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($tableAlias);
-                            $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($parentAlias);
+                            $params['left_join_table_alias'] = $dataObject['relatedModuleBean']->db->quoteIdentifier($dataObject['reportModuleBean']->table_name);
                         }
-                        $linkAlias = $parentAlias . "|" . $tableAlias;
+                        $linkAlias = $dataObject['reportModuleBean']->table_name . "|" . $tableAlias;
                         $params['join_table_link_alias'] = $this->db->quoteIdentifier($linkAlias);
                         $join = $dataObject['reportModuleBean']->$relationship->getJoin($params, true);
                         $dataObject['queryArray']['join'][$tableAlias] = $join['join'];
@@ -2270,19 +2238,19 @@ class AOR_Report extends Basic
     }
 
 
-    private function primeDataForRelateChart($dataObject) {
-        $condition = $dataObject['condition'];
-        $conditionFieldDefs = $dataObject['conditionFieldDefs'];
-        if (isset($conditionFieldDefs['id_name'])) {
-            $condition->field = $conditionFieldDefs['id_name'];
-            $data_new = $dataObject['reportModuleBean']->field_defs[$condition->field];
-            if (!empty($data_new['source']) && $data_new['source'] == 'non-db' && $data_new['type'] != 'link' && isset($conditionFieldDefs['link'])) {
-                $data_new['type'] = 'link';
-                $data_new['relationship'] = $conditionFieldDefs['link'];
-            }
-            $conditionFieldDefs = $data_new;
-        }
-    }
+//    private function primeDataForRelateChart($dataObject) {
+//        $condition = $dataObject['condition'];
+//        $conditionFieldDefs = $dataObject['conditionFieldDefs'];
+//        if (isset($conditionFieldDefs['id_name'])) {
+//            $condition->field = $conditionFieldDefs['id_name'];
+//            $data_new = $dataObject['reportModuleBean']->field_defs[$condition->field];
+//            if (!empty($data_new['source']) && $data_new['source'] == 'non-db' && $data_new['type'] != 'link' && isset($conditionFieldDefs['link'])) {
+//                $data_new['type'] = 'link';
+//                $data_new['relationship'] = $conditionFieldDefs['link'];
+//            }
+//            $conditionFieldDefs = $data_new;
+//        }
+//    }
 
     /**
      * @param $query
@@ -2308,8 +2276,7 @@ class AOR_Report extends Basic
         $table_alias
     ) {
         if ($data['source'] == 'non-db') {
-            $new_field_module = new $beanList[getRelatedModule($condition_module->module_dir,
-                $data['relationship'])];
+            $new_field_module = new $beanList[getRelatedModule($condition_module->module_dir, $data['relationship'])];
             $table_alias = $data['relationship'];
             $query = $this->buildReportQueryJoin($data['relationship'], $table_alias, $oldAlias,
                 $condition_module, 'relationship', $query, $new_field_module);
@@ -2328,29 +2295,45 @@ class AOR_Report extends Basic
     }
 
 
-
     private function primeDataForLinkChart(
         $query,
-        $data,
+        $fieldMetaData,
         $beanList,
         $condition_module,
         $oldAlias,
         $path,
-        $rel,
+        $relationship,
         $condition,
         $table_alias
     ) {
-        if ($data['source'] == 'non-db') {
-            $new_field_module = new $beanList[getRelatedModule($condition_module->module_dir,
-                $data['relationship'])];
-            $table_alias = $data['relationship'];
-            $query = $this->buildReportQueryJoin($data['relationship'], $table_alias, $oldAlias,
-                $condition_module, 'relationship', $query, $new_field_module);
+
+        $query = $dataObject['queryArray'];
+        $fieldMetaData = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->value];
+        $beanList = $dataObject['beanList'];
+        $condition_module = $dataObject['reportModuleBean'];
+        $oldAlias = $dataObject['oldAlias'];
+        $path = unserialize(base64_decode($dataObject['field']->module_path));
+        $relationship = $relationship;
+        $condition = $dataObject['condition'];
+        $table_alias = $dataObject['tableAlias'];
+
+        if ($fieldMetaData['source'] == 'non-db') {
+            $new_field_module = new $beanList[getRelatedModule($condition_module->module_dir, $fieldMetaData['relationship'])];
+            $table_alias = $fieldMetaData['relationship'];
+            $query = $this->buildReportQueryJoin(
+                $fieldMetaData['relationship'],
+                $table_alias,
+                $oldAlias,
+                $condition_module,
+                'relationship',
+                $query,
+                $new_field_module
+            );
             $condition_module = $new_field_module;
 
             // Debugging: security groups conditions - It's a hack to just get the query working
             if ($condition_module->module_dir = 'SecurityGroups' && count($path) > 1) {
-                $table_alias = $oldAlias . ':' . $rel;
+                $table_alias = $oldAlias . ':' . $relationship;
             }
             $condition->field = 'id';
 
@@ -2359,9 +2342,7 @@ class AOR_Report extends Basic
 
         return array($table_alias, $query, $condition_module);
     }
-
-
-
+    
     /**
      * @param $isCustomField
      * @param $tableName
@@ -2392,24 +2373,16 @@ class AOR_Report extends Basic
 
     private function setFieldTablesSuffixChart(&$dataObject){
         $suffix = '_cstm';
-        $tableName = $dataObject['tableAlias'];
-        $tableAlias = $tableName;
-        $fieldName = $dataObject['condition']->field;
-        $tableName = $dataObject['tableAlias'];
-
-        $conditionFieldDefs = $dataObject['reportModuleBean']->field_defs[$fieldName];
+        $conditionFieldDefs = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->field];
         $dataSourceIsSet = isset($conditionFieldDefs['source']);
         if ($dataSourceIsSet) {
             $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
             if ($isCustomField) {
-                $value = $tableName . $suffix . '.' . $fieldName;
+                $value = $dataObject['tableAlias'] . $suffix . '.' . $dataObject['condition']->field;
             }
         }else{
-            $value = ($tableAlias ? "`$tableAlias`" : $tableName) . '.' . $fieldName;
+            $value = ($dataObject['tableAlias'] ? '`'.$dataObject['tableAlias'].'`' : $dataObject['tableAlias']) . '.' . $dataObject['condition']->field;
         }
-
-//        $conditionsFields = array();
-//        array_push($conditionsFields,$value);
         $dataObject['queryArray']['conditionFields'][] = $value;
     }
 
@@ -2429,14 +2402,13 @@ class AOR_Report extends Basic
 
 
     private function buildConditionUserParamsChart(&$dataObject) {
-        $condition = $dataObject['condition'];
         $params = $dataObject['user_parameters'];
-        if (!empty($params[$condition->id])) {
-            if ($condition->parameter) {
-                $condParam = $params[$condition->id];
-                $condition->value = $condParam['value'];
-                $condition->operator = $condParam['operator'];
-                $condition->value_type = $condParam['type'];
+        if (!empty($params[$dataObject['condition']->id])) {
+            if ($dataObject['condition']->parameter) {
+                $condParam = $params[$dataObject['condition']->id];
+                $dataObject['condition']->value = $condParam['value'];
+                $dataObject['condition']->operator = $condParam['operator'];
+                $dataObject['condition']->value_type = $condParam['type'];
             }
         }
     }
@@ -2475,29 +2447,21 @@ class AOR_Report extends Basic
 
 
     private function buildJoinQueryForCustomFieldsChart(&$dataObject) {
-
-        $query = $dataObject['queryArray'];
-        $table_alias = $dataObject['tableAlias'];
-        $tableName = $dataObject['tableAlias'];
-        $condition_module = $dataObject['reportModuleBean'];
-        $fieldName = $dataObject['condition']->field;
-
-        $conditionFieldDefs = $dataObject['reportModuleBean']->field_defs[$fieldName];
+        $conditionFieldDefs = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->field];
         $dataSourceIsSet = isset($conditionFieldDefs['source']);
         if ($dataSourceIsSet) {
             $isCustomField = ($conditionFieldDefs['source'] == 'custom_fields') ? true : false;
             if ($isCustomField) {
-                $query = $this->buildReportQueryJoin(
-                $tableName . '_cstm',
-                $table_alias . '_cstm',
-                $table_alias,
-                $condition_module,
-                'custom',
-                $query);
+                $dataObject['queryArray'] = $this->buildReportQueryJoin(
+                    $dataObject['tableAlias'] . '_cstm',
+                    $dataObject['tableAlias'] . '_cstm',
+                    $dataObject['tableAlias'],
+                    $dataObject['reportModuleBean'],
+                    'custom',
+                    $dataObject['queryArray']);
             }
-
         }
-        $dataObject['queryArray'] =  $query;
+
     }
 
 
@@ -2742,7 +2706,7 @@ class AOR_Report extends Basic
 
 
     private function buildQueryForConditionTypeChart(&$dataObject,$sugar_config,$app_list_strings) {
-        $path = unserialize(base64_decode($dataObject['field']->module_path));
+
         $relationship ='';//TODO: need to try and figure out where this should come from
         switch ($dataObject['condition']->value_type) {
             case 'Field': // is it a specific field
@@ -2754,9 +2718,26 @@ class AOR_Report extends Basic
                         list($fieldMetaData, $dataObject['condition']) = $this->primeDataForRelateChart($dataObject);
                         break;
                     case 'link':
-                        list($dataObject['tableAlias'], $dataObject['queryArray'], $dataObject['reportModuleBean']) = $this->primeDataForLink($dataObject['queryArray'],
-                            $fieldMetaData, $dataObject['beanList'], $dataObject['reportModuleBean'], $dataObject['oldAlias'], $path, $relationship, $dataObject['condition'],
-                            $dataObject['tableAlias']);
+                        $relationshipExists = $dataObject['reportModuleBean']->load_relationship($relationship);
+                        $this->populateDataObjectWithRelatedModuleBean($dataObject, $relationship);
+                        $relationshipSide = $dataObject['reportModuleBean']->$relationship->getSide();
+
+
+                        list(
+                            $dataObject['tableAlias'],
+                            $dataObject['queryArray'],
+                            $dataObject['reportModuleBean']) =
+                            $this->primeDataForLinkChart(
+                                $dataObject['queryArray'],
+                                $fieldMetaData,
+                                $dataObject['beanList'],
+                                $dataObject['reportModuleBean'],
+                                $dataObject['oldAlias'],
+                                $path,
+                                $relationship,
+                                $dataObject['condition'],
+                                $dataObject['tableAlias']
+                            );
                         break;
                 }
 
@@ -2802,16 +2783,17 @@ class AOR_Report extends Basic
 
             case 'Multi': //are there multiple conditions setup
                 //processWhereConditionForTypeMulti
-                $sep = ' AND ';
                 if ($dataObject['condition']->operator == 'Equal_To') {
-                    $sep = ' OR ';
+                    $separtor = ' OR ';
+                }else{
+                    $separtor = ' AND ';
                 }
                 $multi_values = unencodeMultienum($dataObject['condition']->value);
                 if (!empty($multi_values)) {
                     $value = '(';
                     foreach ($multi_values as $multi_value) {
                         if ($value != '(') {
-                            $value .= $sep;
+                            $value .= $separtor;
                         }
                         //TODO: Rationalize this strange logic below $dataObject['allowedOperatorList'][$dataObject['condition']->operator]
                         $value .= $dataObject['queryArray']['conditionFields'][0] . ' ' . $dataObject['allowedOperatorList'][$dataObject['condition']->operator] . " '" . $multi_value . "'";
