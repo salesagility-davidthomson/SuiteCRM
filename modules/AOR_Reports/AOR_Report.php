@@ -2337,6 +2337,7 @@ class AOR_Report extends Basic
 
     private function setFieldTablesSuffixChart(&$dataObject){
         $suffix = '_cstm';
+        $value = null;
         $conditionFieldDefs = $dataObject['reportModuleBean']->field_defs[$dataObject['condition']->field];
         $dataSourceIsSet = isset($conditionFieldDefs['source']);
         if ($dataSourceIsSet) {
