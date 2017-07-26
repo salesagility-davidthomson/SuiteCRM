@@ -27,6 +27,7 @@ require_once ROOTPATH.'/modules/AOR_Reports/aor_utils.php';
 require_once ROOTPATH.'/modules/AOR_Reports/models/ModelAORReports.php';
 
 use modules\AOR_Reports\models\ModelAORReports as Model;
+use modules\AOR_Reports\models\report\ReportFactory as ReportFactory;
 
 class AOR_ReportsController extends SugarController {
 
@@ -663,29 +664,21 @@ class AOR_ReportsController extends SugarController {
         $this->view = 'detail';
         $model = new Model();
         $bean = $this->bean;
-//
-//        if(!empty($bean->id)){
-//            $bean->user_parameters = requestToUserParameters();
-//        }
-
-//        global $beanList;
-//        $chartReport = $model->buildReportChart($this->bean, $beanList, null, AOR_Report::CHART_TYPE_RGRAPH);
-//        die('here');
 
         $reportParams =$model->getReportParameters($this->bean);
         $bean->user_parameters = $model->requestToUserParameters($_REQUEST);
         $this->view_object_map['reportParams'] =$reportParams;
 
-//        $reportHTML = $this->bean->buildMultiGroupReport(0,true);
-//        $this->view_object_map['reportHTML'] =$reportHTML;
+        $chart = ReportFactory::makeReport('chart');
+        $chart->getReport();
+
+//
+//        $chartsHTML = $this->bean->buildReportChart(null, AOR_Report::CHART_TYPE_RGRAPH);
+//        $this->view_object_map['chartsHTML'] =$chartsHTML;
 
 
-        $chartsHTML = $this->bean->buildReportChart(null, AOR_Report::CHART_TYPE_RGRAPH);
-        $this->view_object_map['chartsHTML'] =$chartsHTML;
-
-
-        $chartsPerRow = $this->bean->graphs_per_row;
-        $this->view_object_map['chartsPerRow'] =$chartsPerRow;
+//        $chartsPerRow = $this->bean->graphs_per_row;
+//        $this->view_object_map['chartsPerRow'] =$chartsPerRow;
 
     }
 

@@ -33,6 +33,27 @@ class MysqlQuery extends AbstractQuery
     public function  __construct()
     {
         parent::__construct();
+
+        $this->dataObject = array(
+            'reportId'=>null,
+            'beanList'=>null,
+            'queryArray'=>null,
+            'sqlQuery'=>null,
+            'dataArray'=>null,
+            'field'=>null,
+            'reportModuleBean'=>null,
+            'relatedModuleBean'=>null,
+            'tableAlias'=>null,
+            'oldAlias'=>null,
+            'timeDate'=>null,
+            'currentFieldString'=>null,
+            'condition'=>null,
+            'conditionFieldDefs'=>null,
+            'tiltLogicOperator'=>true,
+            'allowedOperatorList'=>$this->getAllowedOperatorList(),
+            'fieldMetaData'=>null,
+            'WhereStatement',
+        );
     }
 
     public function buildQuery()

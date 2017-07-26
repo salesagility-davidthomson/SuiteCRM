@@ -360,86 +360,67 @@ class ModelAORReports
 
     }
 
-
-    /**
-     * @param null $chartIds
-     * @param string $chartType
-     * @return string
-     */
-    public function buildReportChart($bean, $beanList, $chartIds = null, $chartType = self::CHART_TYPE_PCHART)
+    public function buildReportChart($chartIds = null, $chartType = self::CHART_TYPE_PCHART)
     {
-        global $beanList;
-        $html = '';
+        global $beanList, $timedate, $app_list_strings, $sugar_config;
+        $moduleName = $this->report_module;
+        $ResultRowArray = $this->getFieldsDataArrayChart();
+        $fields = $this->createLabelsChart($ResultRowArray, $beanList);
+        $mainGroupField = $this->getMainGroupSetChart($ResultRowArray);
+        $bean = BeanFactory::getBean($moduleName);
 
-        $sql = "SELECT id FROM aor_fields WHERE aor_report_id = '" . $this->id . "' AND deleted = 0 ORDER BY field_order ASC";
-        $result = $bean->db->query($sql);
-        $mainGroupField = '';
-        $fields = array();
+        $dataObject = array(
+            'reportId'=>null,
+            'beanList'=>null,
+            'queryArray'=>null,
+            'sqlQuery'=>null,
+            'dataArray'=>null,
+            'field'=>null,
+            'reportModuleBean'=>null,
+            'relatedModuleBean'=>null,
+            'tableAlias'=>null,
+            'oldAlias'=>null,
+            'timeDate'=>null,
+            'currentFieldString'=>null,
+            'condition'=>null,
+            'conditionFieldDefs'=>null,
+            'tiltLogicOperator'=>true,
+            'allowedOperatorList'=>$this->getAllowedOperatorListChart(),
+            'fieldMetaData'=>null,
+            'WhereStatement',
+        );
 
-//        $report = ReportFactory::makeReport('chart');
-//        $report->setBean($bean);
-//        $report->setBeanList($beanList);
-//        $report->setFields($fields);
-//        $report->setMainGroupField($mainGroupField);
-//        $report->setResult($result);
-//
-//        $reportContent = $report->getReport();
-//
-//        die();
+        $reportId = $this->id;
+        $dataObject['reportId']=$reportId;
+        $dataObject['reportModuleBean'] = $bean;
+        $dataObject['queryArray'] = array();;
+        $dataObject['beanList'] = $beanList;
+        $dataObject['timeDate']= $timedate;
 
-        if($mainGroupField == ''){
-            $mainGroupField = null; //need to set so AOR_Chart->buildChartHTML functions correctly
+        $moduleBeanName = $beanList[$moduleName];
+        if($moduleBeanName === null){
+            throw new Exception('AOR_Report:buildQueryArraySelectForChart: Module Bean Does Not Exist',103);
         }
-        $this->createLabelData($result, $beanList, $fields, $mainGroupField);
+        //Check if the user has access to the target module
+        if (!(ACLController::checkAccess($moduleName, 'list', true))) {
+            throw new Exception('AOR_Report:buildReportQueryChart: User Not Allowed Access To This Module', 101);
+        }
 
         try {
-            $query = $this->buildReportQueryChart();//this is where it needs to branch one report for normal queries and one for charts
+            $this->buildReportQueryChart($dataObject, $app_list_strings, $sugar_config);
         } catch (Exception $e) {
             echo 'Caught exception: ', $e->getMessage(), "\n";
         }
 
-//      use query to get results from database of choice
-
-        $result = $this->db->query($query);
-        $data = $this->BuildDataRowsForChart($result, $fields);
+        $result2 = $this->db->query($dataObject['sqlQuery']);
+        $data = $this->BuildDataRowsForChart($result2, $fields);
 
         $fields = $this->getReportFields();
 
-        switch ($chartType) {
-            case self::CHART_TYPE_PCHART:
-                $html = '<script src="modules/AOR_Charts/lib/pChart/imagemap.js"></script>';
-                break;
-            case self::CHART_TYPE_CHARTJS:
-                $html = '<script src="modules/AOR_Reports/js/Chart.js"></script>';
-                break;
-            case self::CHART_TYPE_RGRAPH:
-                if ($_REQUEST['module'] != 'Home') {
-                    require_once('include/SuiteGraphs/RGraphIncludes.php');
-                }
-
-                break;
-        }
-        $x = 0;
-
-
-
-        $linkedCharts = $this->get_linked_beans('aor_charts', 'AOR_Charts');
-        if (!$linkedCharts) {
-            //No charts to display
-            return '';
-        }
-
-        foreach ($linkedCharts as $chart) {
-            if ($chartIds !== null && !in_array($chart->id, $chartIds)) {
-                continue;
-            }
-            $html .= $chart->buildChartHTML($data, $fields, $x, $chartType, $mainGroupField);
-            $x++;
-        }
+        $html = $this->StartBuildChartHTML($chartIds, $chartType, $data, $fields, $mainGroupField);
 
         return $html;
     }
-
 
     /**
      * @param $result

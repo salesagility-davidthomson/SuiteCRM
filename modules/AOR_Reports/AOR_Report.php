@@ -2790,7 +2790,7 @@ class AOR_Report extends Basic
                 break;
         }
 
-        return $where_set;
+        return $where_set; //TODO: fix where_set might not be set in code
     }
 
 

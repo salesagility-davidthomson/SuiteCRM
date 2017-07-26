@@ -16,9 +16,13 @@ abstract class AbstractQuery implements QueryInterface
     private $queryStr = null;
     private $report_module = null;
 
+    protected $dataObject = array();
+
 
     public function __construct()
     {
+
+
     }
 
     public function getQuery(){
@@ -32,6 +36,8 @@ abstract class AbstractQuery implements QueryInterface
         }
         return $content;
     }
+
+
 
     abstract protected function buildQuery();
 
